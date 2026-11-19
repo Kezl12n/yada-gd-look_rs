@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use yada::DoubleArray;
 use yada::builder::DoubleArrayBuilder;
 use zhconv::{Variant, zhconv};
+use pinyin::Pinyin;
+
 
 #[derive(Parser)]
 #[command(
@@ -47,8 +49,14 @@ struct Cli {
     /// Emit all overlapping dictionary subwords inside compounds
     #[arg(long)]
     subwords: bool,
+
+    /// Show tone-marked Pinyin above Chinese words using <ruby> tags
+    #[arg(long)]
+    pinyin: bool,
+
 }
 
+// Directory path
 fn get_dict_dir(override_dir: Option<PathBuf>) -> PathBuf {
     if let Some(dir) = override_dir {
         return dir;
@@ -71,6 +79,24 @@ fn get_dict_dir(override_dir: Option<PathBuf>) -> PathBuf {
     PathBuf::from(".")
 }
 
+
+// Pinyin settings
+fn format_token(word: &str, show_pinyin: bool) -> String {
+    let escaped = word.replace('<', "&lt;").replace('>', "&gt;");
+    if !show_pinyin || !word.chars().any(|c| ('\u{4E00}'..='\u{9FFF}').contains(&c)) {
+        return format!("<a href=\"gdlookup:{0}\">{1}</a> ", word, escaped);
+    }
+
+    let py = Pinyin::phrase(word).to_string();
+
+    format!(
+        "<ruby><a href=\"gdlookup:{0}\">{1}</a><rt>{2}</rt></ruby> ",
+        word, escaped, py
+    )
+}
+
+
+// Main
 fn main() {
     let cli = Cli::parse();
 
@@ -200,15 +226,15 @@ fn main() {
                         if sub_len < byte_len {
                             let sub = &full_word[sub_offset..sub_offset + sub_len];
                             sentence_html
-                                .push_str(&format!("<a href=\"gdlookup:{0}\">{0}</a> ", sub));
+                                .push_str(&format_token(sub, cli.pinyin));
                         }
                     }
                 }
             }
 
-            sentence_html.push_str(&format!(
-                "<a href=\"gdlookup:{0}\">{0}</a> ",
-                &remains[..byte_len]
+            sentence_html.push_str(&format_token(
+                &remains[..byte_len],
+		cli.pinyin
             ));
 
             if cli.debug {
@@ -260,7 +286,7 @@ fn main() {
                     && !"《》 （）！？，。、".contains(first_char)
                 {
                     sentence_html
-                        .push_str(&format!("<a href=\"gdlookup:{0}\">{0}</a> ", first_char));
+                        .push_str(&format_token(&remains[..first_char.len_utf8()], cli.pinyin));
                 } else {
                     sentence_html.push(first_char);
                 }
@@ -294,6 +320,8 @@ fn main() {
             background: rgba(74, 144, 226, 0.18);
             border-bottom-color: transparent;
         }}
+	.gd-bal ruby {{ ruby-align: center; }}
+	.gd-bal rt {{ font-size: 0.58em; opacity: 0.78; letter-spacing: 0.02em; }}
     </style>
     <div class="gd-bal">{}</div>"#,
         sentence_html
