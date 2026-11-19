@@ -1,0 +1,9 @@
+[package]
+name = "yada-gd-look_rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.6.8", features = ["derive"] }
+memmap2 = "0.9.12"
+yada = "0.7.0"
