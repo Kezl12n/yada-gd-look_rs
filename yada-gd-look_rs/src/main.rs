@@ -106,7 +106,6 @@ fn main() {
         let dicts_dir = base_dir.join("dicts");
         fs::create_dir_all(&dicts_dir).ok();
 
-
         let mut files_to_read: Vec<PathBuf> = Vec::new();
         if let Some(custom_input) = cli.input {
             files_to_read.push(custom_input);
@@ -138,6 +137,24 @@ fn main() {
 
         // Iterate over all collected dictionary files (words.txt, --input, and dicts/*)
         for path in &files_to_read {
+	    // StarDict (.idx) support
+            if path.extension().is_some_and(|e| e == "idx") {
+                if let Ok(bytes) = fs::read(path) {
+                    let mut i = 0;
+                    while let Some(nul) = bytes[i..].iter().position(|&b| b == 0) {
+                        if let Ok(w) = std::str::from_utf8(&bytes[i..i + nul]) {
+                            let w = w.trim();
+                            if !w.is_empty() {
+                                words.push(w.to_ascii_lowercase());
+                            }
+                        }
+                        i += nul + 9; // 1 byte '\0' + 4-byte offset + 4-byte size
+                    }
+                    println!("Loaded (.idx): {:?}", path.file_name().unwrap_or_default());
+                }
+                continue;
+            }
+
             // Read file as UTF-8 text; silently skip binary or unreadable files (like dict.da)
             let Ok(raw) = fs::read_to_string(path) else {
                 continue;
@@ -181,11 +198,10 @@ fn main() {
                 }
             }
 
-	    if cli.debug {
-               println!("Loaded: {:?}", path.file_name().unwrap_or_default());
+            if cli.debug {
+                println!("Loaded: {:?}", path.file_name().unwrap_or_default());
             }
         }
-       
 
         // sort by raw UTF-8 bytes & remove duplicates
         words.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
