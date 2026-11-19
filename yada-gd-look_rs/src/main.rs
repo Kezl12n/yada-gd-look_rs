@@ -321,7 +321,18 @@ fn main() {
             border-bottom-color: transparent;
         }}
 	.gd-bal ruby {{ ruby-align: center; }}
-	.gd-bal rt {{ font-size: 0.58em; opacity: 0.78; letter-spacing: 0.02em; }}
+	.gd-bal rt {{
+		font-size: 0.58em;
+		opacity: 0;
+		letter-spacing: 0.02em;
+		transform: translateY(3px);
+    		transition: opacity 0.14s ease, transform 0.14s ease;
+    		pointer-events: none;
+        }}
+	.gd-bal ruby:hover rt {{
+  	    opacity: 0.85;
+    	    transform: translateY(0);
+	}}
     </style>
     <div class="gd-bal">{}</div>"#,
         sentence_html
