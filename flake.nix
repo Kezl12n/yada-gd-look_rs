@@ -10,14 +10,17 @@
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
     in {
-      packages.${system}.default = pkgs.rustPlatform.buildRustPackage {
+      packages.${system}.default = pkgs.rustPlatform.buildRustPackage rec {
         pname = "yada-gd-look_rs";
         version = "0.1.0";
-        src = ./.;
+        src = ./yada-gd-look_rs;
 
-   
+        
+        nativeBuildInputs = [ pkgs.pkg-config ];
+        buildInputs = [ pkgs.zstd ];
+        
         cargoLock = {
-          lockFile = ./Cargo.lock;
+          lockFile = src + "/Cargo.lock";
         };
       };
     };

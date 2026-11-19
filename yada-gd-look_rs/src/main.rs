@@ -1,17 +1,28 @@
+use clap::Parser;
+use memmap2::Mmap;
 use std::fs::{self, File};
 use std::path::PathBuf;
-use memmap2::Mmap;
-use yada::builder::DoubleArrayBuilder;
 use yada::DoubleArray;
-use clap::Parser;
-
+use yada::builder::DoubleArrayBuilder;
+use zhconv::{Variant, zhconv};
 
 #[derive(Parser)]
-#[command(name = "gd-yada", about = "Ultra-fast Mandarin & Double-Array Trie lookup")]
+#[command(
+    name = "yada-gd-look",
+    about = "Ultra-fast Mandarin & Double-Array Trie lookup"
+)]
 struct Cli {
-    /// Build dict.da and defs.bin from source dictionary
+    /// Build dict.da from source dictionary
     #[arg(long)]
     build: bool,
+
+    // for debugging
+    #[arg(long)]
+    debug: bool,
+
+    /// custom input dictionary file (.u8, .txt, .tsv) for --build
+    #[arg(short, long)]
+    input: Option<PathBuf>,
 
     /// Custom dict directory
     #[arg(long)]
@@ -24,164 +35,267 @@ struct Cli {
     /// Full sentence context (%GDSEARCH% in GoldenDict)
     #[arg(short, long)]
     sentence: Option<String>,
+
+    /// Optional Traditional Chinese conversion mode (default: none)
+    #[arg(long)]
+    conv: Option<String>,
+
+    /// Split into single characters for Classical Chinese
+    #[arg(long)]
+    mono: bool,
+
+    /// Emit all overlapping dictionary subwords inside compounds
+    #[arg(long)]
+    subwords: bool,
 }
 
 fn get_dict_dir(override_dir: Option<PathBuf>) -> PathBuf {
-   if let Some(dir) = override_dir {
-      return dir;
-   }
+    if let Some(dir) = override_dir {
+        return dir;
+    }
 
-   if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
-      return PathBuf::from(xdg).join("gd-yada");
-   }
+    if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
+        return PathBuf::from(xdg).join("gd-yada");
+    }
 
-   if let Ok(home) = std::env::var("HOME") {
-      return PathBuf::from(home).join(".local/share/gd-yada");
-   }
+    if let Ok(home) = std::env::var("HOME") {
+        return PathBuf::from(home).join(".local/share/gd-yada");
+    }
 
-   // for Windows
-   if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+    // for Windows
+    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
         return PathBuf::from(local_app_data).join("yada-gd-look");
-   }
-   
-   // fallback
-   PathBuf::from(".")
+    }
+
+    // fallback
+    PathBuf::from(".")
 }
 
-
 fn main() {
-    let cli = Cli::parse();git rm --cached yada-gd-look_rs
+    let cli = Cli::parse();
 
-    
     // make discoverable no matter what
     let base_dir = get_dict_dir(cli.dict_dir);
     let da_path = base_dir.join("dict.da");
-    let defs_path = base_dir.join("defs.bin");
+
+    fs::create_dir_all(&base_dir).expect("Failed to create dict directory");
 
     if cli.build {
-	 // Example definitions in exact ID order (ID 0, ID 1, ID 2...)
-   	 let dict = [
-             ("666", "666 | awesome / skilled"),
-             ("yyds", "yyds | GOAT / eternal god"),
-             ("图书馆", "tú shū guǎn | library"),
-             ("尊嘟假嘟", "zūn dū jiǎ dū | Meme: really or fake?"),
-   	 ];
+        let input_path = cli.input.unwrap_or_else(|| base_dir.join("words.txt"));
+        let raw = fs::read_to_string(&input_path)
+            .unwrap_or_else(|_| panic!("Put a dictionary file at {:?} first!", input_path));
 
-   	 // make growable buffer of raw bytes (8-bit, 32-bit)
-   	 let mut defs_bytes: Vec<u8> = Vec::new();
-   	 let mut keyset: Vec<(&[u8], u32)> = Vec::new();
+        let mut words: Vec<String> = Vec::new();
 
-   	 for (word, def) in &dict {
-     	      // exact byte offset for defs.bin
-     	      let offset = defs_bytes.len() as u32;
-     	      let def_raw = def.as_bytes();
-     
-	      defs_bytes.extend_from_slice(&(def_raw.len() as u32).to_le_bytes());
-	      defs_bytes.extend_from_slice(def_raw);
-     	      keyset.push((word.as_bytes(), offset));
-   	 }
+        for line in raw.lines() {
+            let line = line.trim();
+            // Skip empty lines and '' comments
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
 
-  	 // sort keyset
-   	 keyset.sort_by_key(|k| k.0);
-   	 let da_bytes = DoubleArrayBuilder::build(&keyset).expect("Failed to build DAT");
+            if line.contains('[') && line.contains('/') {
+                let mut parts = line.split_whitespace();
+                if let Some(trad) = parts.next() {
+                    words.push(trad.to_ascii_lowercase());
+                }
+                if let Some(simp) = parts.next() {
+                    words.push(simp.to_ascii_lowercase());
+                }
+            } else {
+                let w = line.split('\t').next().unwrap_or(line).trim();
+                if !w.is_empty() {
+                    words.push(w.to_ascii_lowercase());
+                }
+            }
+        }
+        // sort by raw UTF-8 bytes & remove duplicates
+        words.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
+        words.dedup();
 
+        // make growable buffer of raw bytes (8-bit, 32-bit)
+        let keyset: Vec<(&[u8], u32)> = words.iter().map(|w| (w.as_bytes(), 0)).collect();
+        let da_bytes = DoubleArrayBuilder::build(&keyset).expect("Failed to build DAT");
 
-    	 let da_tmp = base_dir.join("dict.da.tmp");
-         let defs_tmp = base_dir.join("defs.bin.tmp");
+        let da_tmp = base_dir.join("dict.da.tmp");
 
-	 fs::create_dir_all(&base_dir).expect("Failed to create dict directory");
+        // swap atomically so active GoldenDict lookups never crash!
+        fs::write(&da_tmp, &da_bytes).expect("Failed to write temp file");
+        fs::rename(&da_tmp, &da_path).expect("Failed to swap dict.da");
 
-  	 // swap atomically so active GoldenDict lookups never crash!
-   	 fs::write(&da_tmp, &da_bytes).expect("Failed to write temp file");
-   	 fs::rename(&da_tmp, &da_path).expect("Failed to swap dict.da");
+        println!("Built dict.da!");
+        return;
+    }
 
-	 fs::write(&defs_tmp, &defs_bytes).unwrap();
-    	 fs::rename(&defs_tmp, &defs_path).unwrap();
-	 
-	 println!("Built dict.da + defs.bin!");
-	 return;
-   }
-   
-   // Open dict files
-   let da_mmap = unsafe { Mmap::map(&File::open(&da_path).unwrap()).unwrap() };
-   let defs_mmap = unsafe { Mmap::map(&File::open(&defs_path).unwrap()).unwrap() };   
-   let da = DoubleArray::new(da_mmap).expect("Invalid dict.da");
+    // Open dict files
+    let da_mmap = unsafe { Mmap::map(&File::open(&da_path).unwrap()).unwrap() };
+    let da = DoubleArray::new(da_mmap).expect("Invalid dict.da");
 
-   let sentence = cli.sentence.or(cli.word).unwrap_or_else(|| {
-        "主播操作666简直YYDS，我在图书馆看尊嘟假嘟！".to_string()
-   });
-   
-   let low_sentence = sentence.to_ascii_lowercase();
+    let sentence = cli
+        .sentence
+        .or(cli.word)
+        .unwrap_or_else(|| "⚠️ | 输入无效 (Invalid input)".to_string());
 
-   // byte cursor starting at index 0
-   let mut pos = 0;
+    // Conversion settings
+    let sentence = match cli.conv.as_deref() {
+        Some("tw") => zhconv(&sentence, Variant::ZhTW),
+        Some("hk") => zhconv(&sentence, Variant::ZhHK),
+        Some("hant") => zhconv(&sentence, Variant::ZhHant),
+        Some("cn") => zhconv(&sentence, Variant::ZhCN),
+        Some("sg") => zhconv(&sentence, Variant::ZhSG),
+        _ => sentence,
+    };
 
-   // for GoldenDict
-   let mut sentence_html = String::new();
-   let mut cards_html = String::new();
+    // Case-Insensitive Searching
+    let low_sentence = sentence.to_ascii_lowercase();
 
-   // 
-   while pos < low_sentence.len() {
-      let remains = &sentence[pos..];
-      let remains_low = &low_sentence[pos..];
+    // byte cursor starting at index 0
+    let mut pos = 0;
 
-      // longest match
-      if let Some((offset, byte_len)) = da.common_prefix_search(remains_low.as_bytes()).last() {
-         let start = offset as usize;
-	 let def_len = u32::from_le_bytes([
-	     defs_mmap[start],
-	     defs_mmap[start + 1],
-	     defs_mmap[start + 2],
-	     defs_mmap[start + 3]
-	 ]) as usize;
-	 let def_text = std::str::from_utf8(&defs_mmap[start + 4..start + 4 + def_len]).unwrap();
+    // for GoldenDict
+    let mut sentence_html = String::new();
 
-         sentence_html.push_str(&format!("<a href=\"bword://{0}\">{0}</a> ", &remains[..byte_len]));
-	 
-	 
-         cards_html.push_str(&format!(
-            "<div style=\"margin-top:8px; padding:6px; border-left:3px solid #4a90e2;\"><b>{}</b>: {}</div>",
-            &remains[..byte_len], def_text
-         ));
+    // ensuring the lowercase sent matches as well
+    while pos < low_sentence.len() {
+        let remains = &sentence[pos..];
+        let remains_low = &low_sentence[pos..];
 
-	 println!("[MATCH], '{}' (ID: {})", &remains[..byte_len], def_text);
-	 pos += byte_len;
-      }
-      else {
-        // Grab 1 UTF-8 character
-      	let first_char = remains.chars().next().unwrap();
+        // longest match with check
+        let valid_match = if cli.mono {
+            None
+        } else {
+            da.common_prefix_search(remains_low.as_bytes())
+                .filter(|&(_, byte_len)| {
+                    let matched = &remains[..byte_len];
+                    // If match ends with ASCII alphanumeric, ensure next char isn't also ASCII alphanumeric
+                    if matched
+                        .bytes()
+                        .last()
+                        .is_some_and(|b| b.is_ascii_alphanumeric())
+                    {
+                        !remains
+                            .as_bytes()
+                            .get(byte_len)
+                            .is_some_and(|b| b.is_ascii_alphanumeric())
+                    } else {
+                        true
+                    }
+                })
+                .last()
+        };
 
-	if first_char.is_ascii_alphanumeric() {
-	  // Count total bytes of all consecutive English letters or digits (e.g. "Rust" or "2026")
-	  let ascii_len: usize = remains
-	      .chars()
-	      // iterate only alphanumeric characters
-	      .take_while(|c| c.is_ascii_alphanumeric() || *c == '-')
-	      .map(|c| c.len_utf8())
-              .sum();
+        // longest match
+        if let Some((_, byte_len)) = valid_match {
+            // split in subwords
+            if cli.subwords {
+                let full_word = &remains[..byte_len];
+                let full_word_low = &remains_low[..byte_len];
 
+                // Step through every character starting position inside the compound
+                for (sub_offset, _) in full_word.char_indices() {
+                    for (_, sub_len) in
+                        da.common_prefix_search(full_word_low[sub_offset..].as_bytes())
+                    {
+                        // Skip the full compound itself so it isn't printed twice
+                        if sub_len < byte_len {
+                            let sub = &full_word[sub_offset..sub_offset + sub_len];
+                            sentence_html
+                                .push_str(&format!("<a href=\"gdlookup:{0}\">{0}</a> ", sub));
+                        }
+                    }
+                }
+            }
 
-	  let ascii_word = &remains[..ascii_len];
-	  sentence_html.push_str(&format!("<a href=\"bword://{0}\">{0}</a> ", ascii_word));
+            sentence_html.push_str(&format!(
+                "<a href=\"gdlookup:{0}\">{0}</a> ",
+                &remains[..byte_len]
+            ));
 
-	  println!("[ASCII], '{}'", ascii_word);
-	  pos += ascii_len; // jump forward by latin characters
-	}
-	else {
-	  // For hanzi characters
-	  println!("[CHAR], '{}'", first_char);
-	  pos += first_char.len_utf8(); // jump forward by 3/4 bytes
-	}
-      }
-   }
+            if cli.debug {
+                eprintln!("[MATCH], '{}'", &remains[..byte_len]);
+            }
+            pos += byte_len;
+        } else {
+            // Grab 1 UTF-8 character
+            let first_char = remains.chars().next().unwrap();
 
-   // Print final HTML for GoldenDict-ng!
-   println!("<div><div style=\"font-size:1.3em; margin-bottom:10px;\">{}</div>{}</div>", sentence_html, cards_html);
-   
+            if first_char.is_ascii_alphanumeric() {
+                // Count total bytes of all consecutive English letters or digits (e.g. "Rust" or "2026")
+                let ascii_len: usize = remains
+                    .chars()
+                    // iterate only alphanumeric characters
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '-')
+                    .map(|c| c.len_utf8())
+                    .sum();
 
-   // common prefixs
-   //   let matches: Vec<_> = da.common_prefix_search(sentence.as_bytes()).collect();
+                let ascii_word = &remains[..ascii_len];
+                sentence_html.push_str(&format!("<a href=\"gdlookup:{0}\">{0}</a> ", ascii_word));
 
-   //println!("Matches at start of '{}': {:?}", sentence, matches);
+                if cli.debug {
+                    eprintln!("[ASCII], '{}'", ascii_word);
+                }
 
+                pos += ascii_len; // jump forward by latin characters
+            }
+            // Bring all emojis!
+            else if (first_char as u32) >= 0x1F300 {
+                sentence_html.push_str(&format!("<a href=\"gdlookup:{0}\">{0}</a> ", first_char));
+                pos += first_char.len_utf8();
+            }
+            // Bring the question/exclamation marks in!
+            else if matches!(first_char, '?' | '？' | '!' | '！') {
+                let encoded = match first_char {
+                    '?' => "%3F".to_string(),
+                    _ => first_char.to_string(),
+                };
+                sentence_html.push_str(&format!(
+                    "<a href=\"gdlookup:{}\">{}</a>",
+                    encoded, first_char
+                ));
+                pos += first_char.len_utf8();
+            } else {
+                // For hanzi characters & punctuation (important for mono)
+                if !first_char.is_whitespace()
+                    && !first_char.is_ascii_punctuation()
+                    && !"《》 （）！？，。、".contains(first_char)
+                {
+                    sentence_html
+                        .push_str(&format!("<a href=\"gdlookup:{0}\">{0}</a> ", first_char));
+                } else {
+                    sentence_html.push(first_char);
+                }
+                if cli.debug {
+                    eprintln!("[CHAR], '{}'", first_char);
+                }
+                pos += first_char.len_utf8(); // jump forward by 3 or 4 bytes
+            }
+        }
+    }
+
+    // Print final HTML for GoldenDict-ng!
+    println!(
+        r#"<style>
+        .gd-bal {{
+            font-size: 1.3em;
+            line-height: 1.6;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+        }}
+        .gd-bal a {{
+            color: inherit;
+            text-decoration: none;
+            padding: 2px 4px;
+            border-radius: 4px;
+            border-bottom: 1px dotted rgba(128, 128, 128, 0.45);
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }}
+        .gd-bal a:hover {{
+            background: rgba(74, 144, 226, 0.18);
+            border-bottom-color: transparent;
+        }}
+    </style>
+    <div class="gd-bal">{}</div>"#,
+        sentence_html
+    );
 }

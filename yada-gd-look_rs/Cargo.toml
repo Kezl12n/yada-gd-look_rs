@@ -7,3 +7,4 @@ edition = "2024"
 clap = { version = "4.6.8", features = ["derive"] }
 memmap2 = "0.9.12"
 yada = "0.7.0"
+zhconv = "0.4.2"
