@@ -1,12 +1,11 @@
 use clap::Parser;
 use memmap2::Mmap;
+use pinyin::Pinyin;
 use std::fs::{self, File};
 use std::path::PathBuf;
 use yada::DoubleArray;
 use yada::builder::DoubleArrayBuilder;
 use zhconv::{Variant, zhconv};
-use pinyin::Pinyin;
-
 
 #[derive(Parser)]
 #[command(
@@ -53,7 +52,6 @@ struct Cli {
     /// Show tone-marked Pinyin above Chinese words using <ruby> tags
     #[arg(long)]
     pinyin: bool,
-
 }
 
 // Directory path
@@ -67,7 +65,7 @@ fn get_dict_dir(override_dir: Option<PathBuf>) -> PathBuf {
     }
 
     if let Ok(home) = std::env::var("HOME") {
-        return PathBuf::from(home).join(".local/share/gd-yada");
+        return PathBuf::from(home).join(".local/share/yada-gd-look");
     }
 
     // for Windows
@@ -78,7 +76,6 @@ fn get_dict_dir(override_dir: Option<PathBuf>) -> PathBuf {
     // fallback
     PathBuf::from(".")
 }
-
 
 // Pinyin settings
 fn format_token(word: &str, show_pinyin: bool) -> String {
@@ -95,7 +92,6 @@ fn format_token(word: &str, show_pinyin: bool) -> String {
     )
 }
 
-
 // Main
 fn main() {
     let cli = Cli::parse();
@@ -107,34 +103,90 @@ fn main() {
     fs::create_dir_all(&base_dir).expect("Failed to create dict directory");
 
     if cli.build {
-        let input_path = cli.input.unwrap_or_else(|| base_dir.join("words.txt"));
-        let raw = fs::read_to_string(&input_path)
-            .unwrap_or_else(|_| panic!("Put a dictionary file at {:?} first!", input_path));
+        let dicts_dir = base_dir.join("dicts");
+        fs::create_dir_all(&dicts_dir).ok();
 
-        let mut words: Vec<String> = Vec::new();
 
-        for line in raw.lines() {
-            let line = line.trim();
-            // Skip empty lines and '' comments
-            if line.is_empty() || line.starts_with('#') {
-                continue;
+        let mut files_to_read: Vec<PathBuf> = Vec::new();
+        if let Some(custom_input) = cli.input {
+            files_to_read.push(custom_input);
+        } else {
+            let default_words = base_dir.join("words.txt");
+            if default_words.exists() {
+                files_to_read.push(default_words);
             }
-
-            if line.contains('[') && line.contains('/') {
-                let mut parts = line.split_whitespace();
-                if let Some(trad) = parts.next() {
-                    words.push(trad.to_ascii_lowercase());
-                }
-                if let Some(simp) = parts.next() {
-                    words.push(simp.to_ascii_lowercase());
-                }
-            } else {
-                let w = line.split('\t').next().unwrap_or(line).trim();
-                if !w.is_empty() {
-                    words.push(w.to_ascii_lowercase());
+            let dicts_dir = base_dir.join("dicts");
+            if let Ok(entries) = fs::read_dir(&dicts_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() {
+                        files_to_read.push(path);
+                    }
                 }
             }
         }
+
+        if files_to_read.is_empty() {
+            fs::create_dir_all(base_dir.join("dicts")).ok();
+            panic!(
+                "No dictionaries found! Put .txt, .u8, .tsv, or .dict.yaml files in {:?}",
+                base_dir.join("dicts")
+            );
+        }
+
+        let mut words: Vec<String> = Vec::new();
+
+        // Iterate over all collected dictionary files (words.txt, --input, and dicts/*)
+        for path in &files_to_read {
+            // Read file as UTF-8 text; silently skip binary or unreadable files (like dict.da)
+            let Ok(raw) = fs::read_to_string(path) else {
+                continue;
+            };
+
+            // Tracks whether we are inside a Rime .dict.yaml metadata header (--- to ...)
+            let mut in_yaml = false;
+
+            // Modify lines
+            for line in raw.lines().map(str::trim) {
+                // Skip Rime .dict.yaml frontmatter (--- ... ...)
+                if line == "---" {
+                    in_yaml = true;
+                    continue;
+                }
+                if line == "..." {
+                    in_yaml = false;
+                    continue;
+                }
+
+                // Skip commentator in CC-CEDICT
+                if in_yaml || line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+
+                // CC-CEDICT format: Traditional Simplified [pinyin] /def/
+                if line.contains('[') && line.contains('/') {
+                    let mut parts = line.split_whitespace();
+                    if let Some(trad) = parts.next() {
+                        words.push(trad.to_ascii_lowercase());
+                    }
+                    if let Some(simp) = parts.next() {
+                        words.push(simp.to_ascii_lowercase());
+                    }
+                } else {
+                    // Rime .dict.yaml, TSV, or plain wordlist (word\tpinyin\tfreq)
+                    let w = line.split('\t').next().unwrap_or(line).trim();
+                    if !w.is_empty() {
+                        words.push(w.to_ascii_lowercase());
+                    }
+                }
+            }
+
+	    if cli.debug {
+               println!("Loaded: {:?}", path.file_name().unwrap_or_default());
+            }
+        }
+       
+
         // sort by raw UTF-8 bytes & remove duplicates
         words.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
         words.dedup();
@@ -225,17 +277,13 @@ fn main() {
                         // Skip the full compound itself so it isn't printed twice
                         if sub_len < byte_len {
                             let sub = &full_word[sub_offset..sub_offset + sub_len];
-                            sentence_html
-                                .push_str(&format_token(sub, cli.pinyin));
+                            sentence_html.push_str(&format_token(sub, cli.pinyin));
                         }
                     }
                 }
             }
 
-            sentence_html.push_str(&format_token(
-                &remains[..byte_len],
-		cli.pinyin
-            ));
+            sentence_html.push_str(&format_token(&remains[..byte_len], cli.pinyin));
 
             if cli.debug {
                 eprintln!("[MATCH], '{}'", &remains[..byte_len]);
