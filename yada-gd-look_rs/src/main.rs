@@ -255,8 +255,8 @@ fn main() {
                                     pinyin_map
                                         .entry(key)
                                         .and_modify(|existing: &mut String| {
-                                            if !existing.split(" / ").any(|p| p == toned) {
-                                                existing.push_str(" / ");
+                                            if !existing.split(" · ").any(|p| p == toned) {
+                                                existing.push_str(" · ");
                                                 existing.push_str(&toned);
                                             }
                                         })
@@ -528,7 +528,5 @@ fn main() {
             r#"<style>{}</style><div class="{}"><div class="sentence">{}</div></div>"#,
             CSS, wrapper_class, sentence_html
         );
-
-	
     }
 }
