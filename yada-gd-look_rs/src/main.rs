@@ -7,6 +7,10 @@ use yada::DoubleArray;
 use yada::builder::DoubleArrayBuilder;
 use zhconv::{Variant, zhconv};
 
+// local files
+mod parsers;
+use parsers::pinyin_to_toned;
+
 const CSS: &str = include_str!("style.css");
 
 #[derive(Parser)]
@@ -15,20 +19,19 @@ const CSS: &str = include_str!("style.css");
     about = "Ultra-fast Mandarin & Double-Array Trie lookup"
 )]
 struct Cli {
-    // remove spacing
+    /// Remove spacing
     #[arg(long)]
     no_space: bool,
-   
 
     /// Build dict.da from source dictionary
     #[arg(long)]
     build: bool,
 
-    // for debugging
+    // For debugging
     #[arg(long)]
     debug: bool,
 
-    /// custom input dictionary file (.u8, .txt, .tsv) for --build
+    /// Custom input dict file (.u8, .txt, .tsv) for --build
     #[arg(short, long)]
     input: Option<PathBuf>,
 
@@ -85,24 +88,62 @@ fn get_dict_dir(override_dir: Option<PathBuf>) -> PathBuf {
     PathBuf::from(".")
 }
 
-// Spacing settings
-fn format_token(word: &str, show_pinyin: bool) -> String {
-    let escaped = word.replace('<', "&lt;").replace('>', "&gt;");
-    if !show_pinyin || !word.chars().any(|c| ('\u{4E00}'..='\u{9FFF}').contains(&c)) {
-        return format!("<a href=\"gdlookup:{0}\">{1}</a>", word, escaped);
+// include rare/historical char
+fn is_cjk(c: char) -> bool {
+    matches!(
+        c,
+        '\u{4E00}'..='\u{9FFF}'   // CJK Unified Ideographs (Main)
+        | '\u{3400}'..='\u{4DBF}' // CJK Extension A (Rare characters)
+        | '\u{F900}'..='\u{FAFF}' // CJK Compatibility Ideographs
+    | '\u{20000}'..='\u{323AF}' // CJK Extensions B–I
+    )
+}
+
+// Spacing settings (/w pinyin)
+fn format_token(
+    word: &str,
+    // for pinyin (including dict & fallback)
+    show_pinyin: bool,
+
+    // for dict pinyin
+    pinyin_map: &std::collections::HashMap<String, String>,
+) -> String {
+    // prevent broken links on quotes & html layout
+    let escaped = word
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;");
+
+    if !show_pinyin || !word.chars().any(is_cjk) {
+        return format!("<a href=\"gdlookup:{0}\">{1}</a>", escaped, escaped);
     }
 
-    let py = Pinyin::phrase(word).to_string();
+    // pinyin variables
+    let (py, src) = match pinyin_map.get(&word.to_ascii_lowercase()) {
+        Some(p) => (p.clone(), 0), // `p` is just the `&String` found inside `pinyin_map`
+        None => (Pinyin::phrase(word).to_string(), 1),
+    };
 
+    // pinyin: dict first (#0), pinyin-converter as fallback (#1)
     format!(
-        "<ruby><a href=\"gdlookup:{0}\">{1}</a><rt>{2}</rt></ruby> ",
-        word, escaped, py
+        "<ruby data-src=\"{src}\"><a href=\"gdlookup:{escaped}\">{escaped}</a><rt>{py}</rt></ruby>"
     )
+}
+
+// filter dicts by allowing letters with tone marks (pinyin)
+fn has_tone_marks(pinyin: &str) -> bool {
+    const TONE_CHARS: &str = "āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜĀÁǍÀĒÉĚÈĪÍǏÌŌÓǑÒŪÚǓÙǕǗǙǛ";
+    pinyin.chars().any(|c| TONE_CHARS.contains(c))
 }
 
 // Main
 fn main() {
     let cli = Cli::parse();
+
+    // dict content
+    let mut words: Vec<String> = Vec::new();
+    let mut pinyin_map = std::collections::HashMap::new();
 
     // make discoverable no matter what
     let base_dir = get_dict_dir(cli.dict_dir);
@@ -145,8 +186,6 @@ fn main() {
             );
         }
 
-        let mut words: Vec<String> = Vec::new();
-
         // Iterate over all collected dictionary files (words.txt, --input, and dicts/*)
         for path in &files_to_read {
             // StarDict (.idx) support
@@ -162,7 +201,10 @@ fn main() {
                         }
                         i += nul + 9; // 1 byte '\0' + 4-byte offset + 4-byte size
                     }
-                    println!("Loaded (.idx): {:?}", path.file_name().unwrap_or_default());
+
+                    if cli.debug {
+                        eprintln!("Loaded (.idx): {:?}", path.file_name().unwrap_or_default());
+                    }
                 }
                 continue;
             }
@@ -192,31 +234,72 @@ fn main() {
                     continue;
                 }
 
-                // CC-CEDICT format: Traditional Simplified [pinyin] /def/
+                // Special for CC-CEDICT format: Traditional Simplified [pinyin] /def/
                 if line.contains('[') && line.contains('/') {
                     let mut parts = line.split_whitespace();
-                    if let Some(trad) = parts.next() {
-                        words.push(trad.to_ascii_lowercase());
-                    }
-                    if let Some(simp) = parts.next() {
-                        words.push(simp.to_ascii_lowercase());
+                    if let (Some(trad), Some(simp)) = (parts.next(), parts.next()) {
+                        // mixed script support
+                        let trad_norm = trad.to_ascii_lowercase();
+                        let simp_norm = simp.to_ascii_lowercase();
+
+                        words.push(trad_norm.clone());
+                        words.push(simp_norm.clone());
+
+                        // Extract `[pinyin]` and convert numbers to tone marks
+                        if let Some((_, rest)) = line.split_once('[') {
+                            if let Some((raw_pinyin, _)) = rest.split_once(']') {
+                                let toned = pinyin_to_toned(raw_pinyin);
+                                // add multiple pinyin readings
+                                for key in [trad_norm, simp_norm] {
+                                    pinyin_map
+                                        .entry(key)
+                                        .and_modify(|existing: &mut String| {
+                                            if !existing.split(" / ").any(|p| p == toned) {
+                                                existing.push_str(" / ");
+                                                existing.push_str(&toned);
+                                            }
+                                        })
+                                        .or_insert_with(|| toned.clone());
+                                }
+                            }
+                        }
                     }
                 } else {
-                    // Rime .dict.yaml, TSV, or plain wordlist (word\tpinyin\tfreq)
-                    let w = line.split('\t').next().unwrap_or(line).trim();
+                    // Rime .dict.yaml, TSV, or plain wordlist (word\tpinyin\tfreq) (index 0)
+                    let mut cols = line.split('\t');
+                    let w = cols.next().unwrap_or("").trim();
                     if !w.is_empty() {
-                        words.push(w.to_ascii_lowercase());
+                        let key = w.to_ascii_lowercase();
+                        words.push(key.clone());
+
+                        // grab from index 1 (extract dict's pinyin)
+                        if let Some(py) = cols.next().map(str::trim).filter(|s| !s.is_empty()) {
+                            if has_tone_marks(py) {
+                                // filter by tone marks
+                                pinyin_map.insert(key, py.to_string());
+                            }
+                        }
                     }
                 }
             }
 
+            for v in pinyin_map.values_mut() {
+                if v.contains(" / ") {
+                    let mut parts: Vec<&str> = v.split(" / ").collect();
+                    parts.sort_by_key(|p| p.chars().next().is_some_and(|c| c.is_uppercase()));
+                    *v = parts.join(" / ");
+                }
+            }
+
             if cli.debug {
-                println!("Loaded: {:?}", path.file_name().unwrap_or_default());
+                eprintln!("Loaded: {:?}", path.file_name().unwrap_or_default());
+                eprintln!("DEBUG: pinyin_map loaded {} entries", pinyin_map.len());
+                eprintln!("DEBUG: sample '中国' -> {:?}", pinyin_map.get("中国"));
             }
         }
 
         // sort by raw UTF-8 bytes & remove duplicates
-        words.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
+        words.sort_unstable();
         words.dedup();
 
         // make growable buffer of raw bytes (8-bit, 32-bit)
@@ -229,13 +312,27 @@ fn main() {
         fs::write(&da_tmp, &da_bytes).expect("Failed to write temp file");
         fs::rename(&da_tmp, &da_path).expect("Failed to swap dict.da");
 
-        println!("Built dict.da!");
+        let py_data: String = pinyin_map
+            .iter()
+            .map(|(k, v)| format!("{k}\t{v}\n"))
+            .collect();
+        fs::write(base_dir.join("pinyin.bin.tmp"), &py_data).unwrap();
+        fs::rename(base_dir.join("pinyin.bin.tmp"), base_dir.join("pinyin.bin")).unwrap();
+
+        println!("Built dict.da & pinyin.bin!");
         return;
     }
 
-    // Open dict files
+    // Open files
     let da_mmap = unsafe { Mmap::map(&File::open(&da_path).unwrap()).unwrap() };
     let da = DoubleArray::new(da_mmap).expect("Invalid dict.da");
+
+    let py_raw = fs::read_to_string(base_dir.join("pinyin.bin")).unwrap_or_default();
+    let pinyin_map: std::collections::HashMap<String, String> = py_raw
+        .lines()
+        .filter_map(|l| l.split_once('\t'))
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
 
     let sentence = cli
         .sentence
@@ -261,6 +358,9 @@ fn main() {
     // for GoldenDict
     let mut sentence_html = String::new();
     let mut subwords_html = String::new();
+
+    // hashset for grid to reduce duplicates
+    let mut seen_boxes = std::collections::HashSet::new();
 
     // ensuring the lowercase sent matches as well
     while pos < low_sentence.len() {
@@ -296,11 +396,10 @@ fn main() {
             let full_word = &remains[..byte_len];
 
             // sent wrapper
-            sentence_html.push_str(&format_token(full_word, cli.pinyin));
-	    if !cli.no_space {
-    	       sentence_html.push(' ');
-	    }
-	    
+            sentence_html.push_str(&format_token(full_word, cli.pinyin, &pinyin_map));
+            if !cli.no_space {
+                sentence_html.push(' ');
+            }
 
             let is_cjk_compound = full_word.chars().count() > 1
                 && full_word
@@ -311,38 +410,40 @@ fn main() {
             if cli.subwords && is_cjk_compound {
                 let full_word_low = &remains_low[..byte_len];
 
-		// for ordering and deduplicating subwords
-		let mut subs: Vec<&str> = Vec::new();
+                // for ordering and deduplicating subwords
+                let mut subs: Vec<&str> = Vec::new();
+             
+	
+                if seen_boxes.insert(full_word) {
+		    // sub wrapper
+                    subwords_html.push_str("<div class=\"token-box\">");
+                    subwords_html.push_str(&format_token(full_word, cli.pinyin, &pinyin_map));
 
-
-                // sub wrapper
-                subwords_html.push_str("<div class=\"token-box\">");
-                subwords_html.push_str(&format_token(full_word, cli.pinyin));
-
-                // Step through every character starting position inside the compound
-                for (sub_offset, _) in full_word.char_indices() {
-                    for (_, sub_len) in
-                        da.common_prefix_search(full_word_low[sub_offset..].as_bytes())
-                    {
-                        // Skip the full compound itself so it isn't printed twice
-                        if sub_len < byte_len {
-                            let sub = &full_word[sub_offset..sub_offset + sub_len];
-			    if !subs.contains(&sub) {
-			      subs.push(sub);
-			    }
+                    // Step through every character starting position inside the compound
+                    for (sub_offset, _) in full_word.char_indices() {
+                        for (_, sub_len) in
+                            da.common_prefix_search(full_word_low[sub_offset..].as_bytes())
+                        {
+                            // Skip the full compound itself so it isn't printed twice
+                            if sub_len < byte_len {
+                                let sub = &full_word[sub_offset..sub_offset + sub_len];
+                                if !subs.contains(&sub) {
+                                    subs.push(sub);
+                                }
+                            }
                         }
                     }
+
+                    // longest -> shortest (left-to-right order)
+                    subs.sort_by_key(|s| std::cmp::Reverse(s.chars().count()));
+
+                    // Render all sorted subwords at once
+                    for sub in subs {
+                        subwords_html.push_str(&format_token(sub, cli.pinyin, &pinyin_map));
+                    }
+
+                    subwords_html.push_str("</div>");
                 }
-
-		// longest -> shortest (left-to-right order)
-		subs.sort_by_key(|s| std::cmp::Reverse(s.chars().count()));
-
-		// Render all sorted subwords at once
-		for sub in subs {
-		    subwords_html.push_str(&format_token(sub, cli.pinyin));
-		}
-
-                subwords_html.push_str("</div>");
             }
 
             if cli.debug {
@@ -393,8 +494,11 @@ fn main() {
                     && !first_char.is_ascii_punctuation()
                     && !"《》 （）！？，。、".contains(first_char)
                 {
-                    sentence_html
-                        .push_str(&format_token(&remains[..first_char.len_utf8()], cli.pinyin));
+                    sentence_html.push_str(&format_token(
+                        &remains[..first_char.len_utf8()],
+                        cli.pinyin,
+                        &pinyin_map,
+                    ));
                 } else {
                     sentence_html.push(first_char);
                 }
@@ -406,7 +510,11 @@ fn main() {
         }
     }
 
-    let wrapper_class = if cli.no_space { "gd-bal no-space" } else { "gd-bal" };
+    let wrapper_class = if cli.no_space {
+        "gd-bal no-space"
+    } else {
+        "gd-bal"
+    };
 
     // Print final HTML for GoldenDict-ng!
     if !subwords_html.is_empty() {
