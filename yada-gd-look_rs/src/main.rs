@@ -15,6 +15,11 @@ const CSS: &str = include_str!("style.css");
     about = "Ultra-fast Mandarin & Double-Array Trie lookup"
 )]
 struct Cli {
+    // remove spacing
+    #[arg(long)]
+    no_space: bool,
+   
+
     /// Build dict.da from source dictionary
     #[arg(long)]
     build: bool,
@@ -71,6 +76,7 @@ fn get_dict_dir(override_dir: Option<PathBuf>) -> PathBuf {
     }
 
     // for Windows
+    #[cfg(target_os = "windows")]
     if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
         return PathBuf::from(local_app_data).join("yada-gd-look");
     }
@@ -79,11 +85,11 @@ fn get_dict_dir(override_dir: Option<PathBuf>) -> PathBuf {
     PathBuf::from(".")
 }
 
-// Pinyin settings
+// Spacing settings
 fn format_token(word: &str, show_pinyin: bool) -> String {
     let escaped = word.replace('<', "&lt;").replace('>', "&gt;");
     if !show_pinyin || !word.chars().any(|c| ('\u{4E00}'..='\u{9FFF}').contains(&c)) {
-        return format!("<a href=\"gdlookup:{0}\">{1}</a> ", word, escaped);
+        return format!("<a href=\"gdlookup:{0}\">{1}</a>", word, escaped);
     }
 
     let py = Pinyin::phrase(word).to_string();
@@ -291,6 +297,10 @@ fn main() {
 
             // sent wrapper
             sentence_html.push_str(&format_token(full_word, cli.pinyin));
+	    if !cli.no_space {
+    	       sentence_html.push(' ');
+	    }
+	    
 
             let is_cjk_compound = full_word.chars().count() > 1
                 && full_word
@@ -396,16 +406,18 @@ fn main() {
         }
     }
 
+    let wrapper_class = if cli.no_space { "gd-bal no-space" } else { "gd-bal" };
+
     // Print final HTML for GoldenDict-ng!
-    if cli.subwords {
+    if !subwords_html.is_empty() {
         println!(
-            r#"<style>{}</style><div class="gd-bal"><div class="sentence">{}</div><div class="subwords">{}</div></div>"#,
-            CSS, sentence_html, subwords_html
+            r#"<style>{}</style><div class="{}"><div class="sentence">{}</div><div class="subwords">{}</div></div>"#,
+            CSS, wrapper_class, sentence_html, subwords_html
         );
     } else {
         println!(
-            r#"<style>{}</style><div class="gd-bal"><div class="sentence">{}</div></div>"#,
-            CSS, sentence_html
+            r#"<style>{}</style><div class="{}"><div class="sentence">{}</div></div>"#,
+            CSS, wrapper_class, sentence_html
         );
     }
 }

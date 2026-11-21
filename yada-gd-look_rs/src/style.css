@@ -12,7 +12,7 @@
     transition: background 0.15s ease, border-color 0.15s ease;
 }
 .gd-bal a:hover {
-    background: rgba(74, 144, 226, 0.18);
+    background: rgba(245, 158, 11, 0.35);
     border-bottom-color: transparent;
 }
 .gd-bal ruby { ruby-align: center; }
@@ -35,8 +35,6 @@
     align-items: flex-start;
     min-width: 3.5em;
     padding: 6px 10px;
-  #  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  #  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
     background: rgba(128, 128, 128, 0.04);
 }
@@ -67,6 +65,20 @@
     font-size: 0.85em;
     line-height: 1.45;
 }
+
+.gd-bal.no-space .sentence {
+    gap: 0;
+    word-spacing: 0;
+}
+
+.gd-bal.no-space .sentence a,
+.gd-bal.no-space .sentence span {
+    margin: 0;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+
 
 
 
