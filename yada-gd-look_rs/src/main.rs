@@ -13,6 +13,7 @@ use parsers::pinyin_to_toned;
 
 const CSS: &str = include_str!("style.css");
 
+
 #[derive(Parser)]
 #[command(
     name = "yada-gd-look",
@@ -527,5 +528,7 @@ fn main() {
             r#"<style>{}</style><div class="{}"><div class="sentence">{}</div></div>"#,
             CSS, wrapper_class, sentence_html
         );
+
+	
     }
 }

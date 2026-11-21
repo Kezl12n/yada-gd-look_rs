@@ -1,6 +1,7 @@
 /* Styling */
 .gd-bal {
     font-size: 1.2em;
+   
 }
 
 .gd-bal a {
@@ -62,6 +63,7 @@
     background: rgba(128, 128, 128, 0.09);
 }
 
+
 /* Main greedy word at the top of the column */
 .gd-bal .token-box > a {
     font-weight: 600;
@@ -105,6 +107,18 @@
     padding-left: 0;
     padding-right: 0;
 }
+
+/* handle left edge clipping (imperfect) */
+.gd-bal .sentence ruby:first-of-type rt {
+  left: 0;
+  transform: translateX(0) translateY(3px);
+}
+
+.gd-bal .sentence ruby:first-of-type:hover rt {
+  transform: translateX(0) translateY(0);
+}
+
+
 
 
 
