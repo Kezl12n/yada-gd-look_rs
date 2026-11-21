@@ -285,10 +285,10 @@ fn main() {
             }
 
             for v in pinyin_map.values_mut() {
-                if v.contains(" / ") {
-                    let mut parts: Vec<&str> = v.split(" / ").collect();
+                if v.contains(" · ") {
+                    let mut parts: Vec<&str> = v.split(" · ").collect();
                     parts.sort_by_key(|p| p.chars().next().is_some_and(|c| c.is_uppercase()));
-                    *v = parts.join(" / ");
+                    *v = parts.join(" · ");
                 }
             }
 
