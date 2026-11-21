@@ -7,6 +7,8 @@ use yada::DoubleArray;
 use yada::builder::DoubleArrayBuilder;
 use zhconv::{Variant, zhconv};
 
+const CSS: &str = include_str!("style.css");
+
 #[derive(Parser)]
 #[command(
     name = "yada-gd-look",
@@ -61,7 +63,7 @@ fn get_dict_dir(override_dir: Option<PathBuf>) -> PathBuf {
     }
 
     if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
-        return PathBuf::from(xdg).join("gd-yada");
+        return PathBuf::from(xdg).join("yada-gd-look");
     }
 
     if let Ok(home) = std::env::var("HOME") {
@@ -107,13 +109,17 @@ fn main() {
         fs::create_dir_all(&dicts_dir).ok();
 
         let mut files_to_read: Vec<PathBuf> = Vec::new();
+
+        // reading through arg (--input)
         if let Some(custom_input) = cli.input {
             files_to_read.push(custom_input);
         } else {
+            // reading through words.txt
             let default_words = base_dir.join("words.txt");
             if default_words.exists() {
                 files_to_read.push(default_words);
             }
+            // reading through dicts dir (Default)
             let dicts_dir = base_dir.join("dicts");
             if let Ok(entries) = fs::read_dir(&dicts_dir) {
                 for entry in entries.flatten() {
@@ -137,7 +143,7 @@ fn main() {
 
         // Iterate over all collected dictionary files (words.txt, --input, and dicts/*)
         for path in &files_to_read {
-	    // StarDict (.idx) support
+            // StarDict (.idx) support
             if path.extension().is_some_and(|e| e == "idx") {
                 if let Ok(bytes) = fs::read(path) {
                     let mut i = 0;
@@ -248,6 +254,7 @@ fn main() {
 
     // for GoldenDict
     let mut sentence_html = String::new();
+    let mut subwords_html = String::new();
 
     // ensuring the lowercase sent matches as well
     while pos < low_sentence.len() {
@@ -280,10 +287,27 @@ fn main() {
 
         // longest match
         if let Some((_, byte_len)) = valid_match {
+            let full_word = &remains[..byte_len];
+
+            // sent wrapper
+            sentence_html.push_str(&format_token(full_word, cli.pinyin));
+
+            let is_cjk_compound = full_word.chars().count() > 1
+                && full_word
+                    .chars()
+                    .all(|c| ('\u{4E00}'..='\u{9FFF}').contains(&c));
+
             // split in subwords
-            if cli.subwords {
-                let full_word = &remains[..byte_len];
+            if cli.subwords && is_cjk_compound {
                 let full_word_low = &remains_low[..byte_len];
+
+		// for ordering and deduplicating subwords
+		let mut subs: Vec<&str> = Vec::new();
+
+
+                // sub wrapper
+                subwords_html.push_str("<div class=\"token-box\">");
+                subwords_html.push_str(&format_token(full_word, cli.pinyin));
 
                 // Step through every character starting position inside the compound
                 for (sub_offset, _) in full_word.char_indices() {
@@ -293,13 +317,23 @@ fn main() {
                         // Skip the full compound itself so it isn't printed twice
                         if sub_len < byte_len {
                             let sub = &full_word[sub_offset..sub_offset + sub_len];
-                            sentence_html.push_str(&format_token(sub, cli.pinyin));
+			    if !subs.contains(&sub) {
+			      subs.push(sub);
+			    }
                         }
                     }
                 }
-            }
 
-            sentence_html.push_str(&format_token(&remains[..byte_len], cli.pinyin));
+		// longest -> shortest (left-to-right order)
+		subs.sort_by_key(|s| std::cmp::Reverse(s.chars().count()));
+
+		// Render all sorted subwords at once
+		for sub in subs {
+		    subwords_html.push_str(&format_token(sub, cli.pinyin));
+		}
+
+                subwords_html.push_str("</div>");
+            }
 
             if cli.debug {
                 eprintln!("[MATCH], '{}'", &remains[..byte_len]);
@@ -327,7 +361,7 @@ fn main() {
 
                 pos += ascii_len; // jump forward by latin characters
             }
-            // Bring all emojis!
+            // Bring all emojis! (starting with the cyclone)
             else if (first_char as u32) >= 0x1F300 {
                 sentence_html.push_str(&format!("<a href=\"gdlookup:{0}\">{0}</a> ", first_char));
                 pos += first_char.len_utf8();
@@ -363,42 +397,15 @@ fn main() {
     }
 
     // Print final HTML for GoldenDict-ng!
-    println!(
-        r#"<style>
-        .gd-bal {{
-            font-size: 1.3em;
-            line-height: 1.6;
-            padding-bottom: 8px;
-            margin-bottom: 12px;
-            border-bottom: 1px solid rgba(128, 128, 128, 0.25);
-        }}
-        .gd-bal a {{
-            color: inherit;
-            text-decoration: none;
-            padding: 2px 4px;
-            border-radius: 4px;
-            border-bottom: 1px dotted rgba(128, 128, 128, 0.45);
-            transition: background 0.15s ease, border-color 0.15s ease;
-        }}
-        .gd-bal a:hover {{
-            background: rgba(74, 144, 226, 0.18);
-            border-bottom-color: transparent;
-        }}
-	.gd-bal ruby {{ ruby-align: center; }}
-	.gd-bal rt {{
-		font-size: 0.58em;
-		opacity: 0;
-		letter-spacing: 0.02em;
-		transform: translateY(3px);
-    		transition: opacity 0.14s ease, transform 0.14s ease;
-    		pointer-events: none;
-        }}
-	.gd-bal ruby:hover rt {{
-  	    opacity: 0.85;
-    	    transform: translateY(0);
-	}}
-    </style>
-    <div class="gd-bal">{}</div>"#,
-        sentence_html
-    );
+    if cli.subwords {
+        println!(
+            r#"<style>{}</style><div class="gd-bal"><div class="sentence">{}</div><div class="subwords">{}</div></div>"#,
+            CSS, sentence_html, subwords_html
+        );
+    } else {
+        println!(
+            r#"<style>{}</style><div class="gd-bal"><div class="sentence">{}</div></div>"#,
+            CSS, sentence_html
+        );
+    }
 }
