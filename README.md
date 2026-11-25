@@ -131,7 +131,8 @@ The OCR feature is disabled by default to keep the base binary lightweight. Enab
 cargo build --release --features ocr
 ```
 
-> **Note:** On the first run, `rusto-rs` automatically downloads and caches the `ppocrv6-small` model (~30.5 MB, 18,708-character vocabulary supporting both Simplified & Traditional Chinese) to your local cache directory. No manual model setup is required.
+> **Note:** On the first run, `rusto-rs` automatically downloads and caches the pp-ocr model (default: medium). No need to do anything.
+ 
 
 ### 2. OCR Hotkey Usage
 
@@ -141,7 +142,12 @@ Pass a screenshot path directly to `-o` (or `--ocr`):
 yada-gd-look_rs -o /tmp/ocr.png
 ```
 
-## Examples /w tools
+---
+
+## Screenshot use /w examples
+
+### Why bring your own screenshot tool?
+yada-gd-look_rs intentionally avoids bundling a heavy cross-platform screen-capture UI. Accepting a standard image file path keeps the binary minimal, avoids Wayland/X11/macOS/Windows permission headaches, and lets you plug OCR into whatever screenshot hotkey you already use.
 
 #### Linux (Niri / Wayland) 
 
