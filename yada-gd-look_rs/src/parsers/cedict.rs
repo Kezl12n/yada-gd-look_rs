@@ -32,21 +32,24 @@ pub fn parse_cedict(
 
                 // Scan `/.../` definitions for `Taiwan pr. [...]`, `also pr. [...]`, etc.
                 let mut tail = after;
-		let mut has_tw_pr = false;
+                let mut tw_alts = Vec::new();
 
                 // split the two halves of tail
                 while let Some((before_pr, after_pr)) = tail.split_once("pr. [") {
                     if let Some((alt_raw, next_tail)) = after_pr.split_once(']') {
                         let alt_toned = pinyin_to_toned(alt_raw);
-                        if !combined.split(" · ").any(|p| p == alt_toned) {
-                            if pinyin_std == PinyinStd::Tw && before_pr.ends_with("Taiwan ") {
-                                combined = format!("{alt_toned} · {combined}");
-				has_tw_pr = true;
-                            } else {
-                                combined.push_str(" · ");
-                                combined.push_str(&alt_toned);
+
+                        if before_pr.ends_with("Taiwan ") {
+                            if !tw_alts.contains(&alt_toned)
+                                && !combined.split(" · ").any(|p| p == alt_toned)
+                            {
+                                tw_alts.push(alt_toned);
                             }
+                        } else if !combined.split(" · ").any(|p| p == alt_toned) {
+                            combined.push_str(" · ");
+                            combined.push_str(&alt_toned);
                         }
+
                         // after last, a new trail comes in the next loop iteration
                         tail = next_tail;
                     } else {
@@ -54,11 +57,21 @@ pub fn parse_cedict(
                     }
                 }
 
-		if debug && trad == "垃圾" {
-        	   eprintln!("DEBUG 垃圾: std={:?}, combined={:?}", pinyin_std, combined);
-    		}
+                // Assemble final order based on Cn vs Tw:
+                let has_tw_pr = !tw_alts.is_empty();
+                if has_tw_pr {
+                    let tw_joined = tw_alts.join(" · ");
+                    match pinyin_std {
+                        PinyinStd::Tw => combined = format!("{tw_joined} · {combined}"),
+                        PinyinStd::Cn => combined = format!("{combined} · {tw_joined}"),
+                    }
+                }
 
+                if debug && trad == "垃圾" {
+                    eprintln!("DEBUG 垃圾: std={:?}, combined={:?}", pinyin_std, combined);
+                }
 
+                let is_multi_char = trad.chars().count() > 1;
 
                 // add multiple pinyin readings
                 for key in [trad_norm, simp_norm] {
@@ -67,7 +80,7 @@ pub fn parse_cedict(
                         if !entry.split(" · ").any(|p| p == r) {
                             if entry.is_empty() {
                                 entry.push_str(r);
-                            } else if idx == 0 && has_tw_pr {
+                            } else if idx == 0 && has_tw_pr && is_multi_char {
                                 // Force Taiwan pronunciation to index 0 even if an earlier line existed
                                 *entry = format!("{r} · {entry}");
                             } else {

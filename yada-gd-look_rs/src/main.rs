@@ -76,7 +76,7 @@ struct Cli {
     #[arg(long)]
     pp_ocr: bool,
 
-    /// Switch reading priority based on the selected nation
+    /// Choose a regional pronunciation standard (pinyin_tw.bin must be built)
     #[arg(long, value_enum, default_value_t = PinyinStd::Cn)]
     pub pinyin_std: PinyinStd,
 }
@@ -157,6 +157,12 @@ fn has_tone_marks(pinyin: &str) -> bool {
 // Main
 fn main() {
     let cli = Cli::parse();
+
+    // for specific pinyin.bin files
+    let py_file = match cli.pinyin_std {
+        PinyinStd::Cn => "pinyin.bin",
+        PinyinStd::Tw => "pinyin_tw.bin",
+    };
 
     // Start OCR extension
     #[cfg(feature = "ocr")]
@@ -247,7 +253,7 @@ fn main() {
                     &mut words,
                     &mut pinyin_map,
                     cli.pinyin_std,
-		    cli.debug
+                    cli.debug,
                 ) {
                     // Rime .dict.yaml, TSV, or plain wordlist (word\tpinyin\tfreq) (index 0)
                     let mut cols = line.split('\t');
@@ -306,10 +312,12 @@ fn main() {
             .iter()
             .map(|(k, v)| format!("{k}\t{v}\n"))
             .collect();
-        fs::write(base_dir.join("pinyin.bin.tmp"), &py_data).unwrap();
-        fs::rename(base_dir.join("pinyin.bin.tmp"), base_dir.join("pinyin.bin")).unwrap();
 
-        println!("Built dict.da & pinyin.bin!");
+        let tmp_file = format!("{py_file}.tmp");
+        fs::write(base_dir.join(&tmp_file), &py_data).unwrap();
+        fs::rename(base_dir.join(&tmp_file), base_dir.join(py_file)).unwrap();
+
+        println!("Built dict.da & {py_file}!");
         return;
     }
 
@@ -317,7 +325,7 @@ fn main() {
     let da_mmap = unsafe { Mmap::map(&File::open(&da_path).unwrap()).unwrap() };
     let da = DoubleArray::new(da_mmap).expect("Invalid dict.da");
 
-    let py_raw = fs::read_to_string(base_dir.join("pinyin.bin")).unwrap_or_default();
+    let py_raw = fs::read_to_string(base_dir.join(py_file)).unwrap_or_default();
     let pinyin_map: std::collections::HashMap<String, String> = py_raw
         .lines()
         .filter_map(|l| l.split_once('\t'))
