@@ -17,6 +17,15 @@ A fast, zero-bloat Mandarin Chinese companion for **GoldenDict-ng**, written in 
 
 ## Quick Start 
 
+> **Nix / Flake Tip:** There are optional features included in the flake's default e.g. `buildFeatures = [ "ocr" ];`. If you want a base build **without** optional dependencies, override it in your flake:
+> ```nix
+> yada-gd-look_rs.overrideAttrs {
+>   buildNoDefaultFeatures = true;
+>   buildFeatures = [ ];
+> }
+> ```
+
+
 ### 1. Build Dictionary & Pinyin `.bin` Files (`dict.da`)
 
 1. **Default (`dicts/` directory):** Drop all your source dictionary files (`.u8`, `.txt`, `.tsv`) into the `dicts/` folder and run:
@@ -82,7 +91,7 @@ yada-gd-look_rs --word "%GDWORD%" --sentence "%GDSEARCH%"
 | `-s, --sentence <SENTENCE>` | Full sentence context (`%GDSEARCH%` in GoldenDict-ng) |
 | `--pinyin` | Show tone-marked Pinyin above Chinese words using `<ruby>` tags |
 | `--subwords` | Emit all overlapping dictionary subwords inside compounds |
-| `--mono` | Split into single characters for Classical Chinese (*Wenyanwen*) |
+| `--mono` | Split into single characters for Classical Chinese (*文言文*) |
 | `--no-space` | Remove spacing between segmented tokens |
 | `--conv <MODE>` | Optional Traditional/Simplified Chinese conversion mode (default: `none`) |
 | `--pinyin-std <cn\|tw>` | Select Mainland PRC or Taiwan pronunciation standard |
@@ -98,8 +107,17 @@ yada-gd-look_rs --word "%GDWORD%" --sentence "%GDSEARCH%"
 
 
 ## OCR Setup (Optional)
+`yada-gd-look_rs` includes an optional **PaddleOCR (PP-OCRv6/ocr-rs)** integration that reads screenshots directly from your clipboard and opens the recognized text in GoldenDict-ng.
 
-Place PP-OCRv6 `.mnn` detection/recognition models and charset files inside `models/` (ignored by Git):
+### 1. Build with OCR Support
+The OCR feature is disabled by default to keep the base binary lightweight. Enable it at compile time:
+
+```bash
+cargo build --release --features ocr
+```
+
+
+Place PP-OCRv6 `.mnn` detection/recognition models and charset files inside `models/` 
 
 ```text
 models/
@@ -117,6 +135,29 @@ yada-gd-look_rs -o             # Standard horizontal OCR (medium tier)
 yada-gd-look_rs -ov            # Vertical / rotated text OCR (Robust mode)
 yada-gd-look_rs -ov -t small   # Vertical OCR using the small model tier
 ```
+
+---
+
+`yada-gd-look_rs -o` reads the latest screenshot directly from your system clipboard, runs OCR, and sends the recognized text straight to GoldenDict-ng.
+
+#### Linux (Niri / Wayland)
+* **One-hotkey drag-to-OCR** (requires `grim`, `slurp`, and `wl-clipboard`) in `~/.config/niri/config.kdl`:
+  ```kdl
+  binds {
+      // Horizontal text OCR
+      Mod+O { spawn "sh" "-c" "grim -g \"\$(slurp)\" - | wl-copy && yada-gd-look_rs -o"; }
+
+      // Vertical / rotated text OCR
+      Mod+Shift+O { spawn "sh" "-c" "grim -g \"\$(slurp)\" - | wl-copy && yada-gd-look_rs -ov"; }
+  }
+  ```
+* **General desktop (GNOME / KDE / X11):** Take a region screenshot to your clipboard using your normal screenshot shortcut, then run `yada-gd-look_rs -o` (or `-ov` for vertical text).
+
+#### Windows
+1. Press **`Win + Shift + S`** and drag a box around the text to copy it to your clipboard.
+2. Run `yada-gd-look_rs.exe -o` (or `-ov` for vertical text).
+   * **Tip:** Create a desktop shortcut to `yada-gd-look_rs.exe`, append `-o` to the **Target** field, set **Start in** to the folder containing `models/`, and assign a **Shortcut key** (e.g., `Ctrl + Alt + O`) in **Properties**.
+
 
 ---
 
