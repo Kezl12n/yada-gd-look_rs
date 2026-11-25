@@ -2,7 +2,7 @@
 
 A fast, zero-bloat Mandarin Chinese companion for **GoldenDict-ng**, written in Rust.
 
-## Philosophy
+## Design Principles
 
 * **Zero Bloat (`yada` + `mmap`):** Dictionaries are compiled ahead of time into memory-mapped Double-Array tries (`yada`), delivering microsecond segmentation and ~0 ms startup latency.
 * **Cross-Strait & Classical Aware:** Includes Simplified/Traditional conversion, and a dedicated **mono-character mode** for reading Classical Chinese (*文言文*) without modern word-segmentation interference.
@@ -174,6 +174,6 @@ yada-gd-look_rs -ov -t small   # Vertical OCR using the small model tier
 
 ---
 
-## Inspirations
+## Credits
 * **[`gd-marisa`](https://github.com/Ajatt-Tools/gd-tools#gd-marisa) (Functionality & Architecture):** Inspired by `gd-marisa`'s trie-backed sentence segmentation and clickable headword lookup workflow—rebuilt in pure Rust using Double-Array tries (`yada`) + `mmap` for microsecond Mandarin prefix matching with zero startup overhead.
 * **[`gd-mandarin`](https://github.com/Ajatt-Tools/gd-tools#gd-mandarin) (Design & Layout):** The model of basic prototype.
