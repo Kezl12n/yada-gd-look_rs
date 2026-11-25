@@ -112,7 +112,7 @@ yada-gd-look_rs --word "%GDWORD%" --sentence "%GDSEARCH%"
 | `--pinyin-std <cn\|tw>` | Select Mainland PRC or Taiwan pronunciation standard |
 | `--build` | Build `dict.da` and Pinyin binaries from a source dictionary |
 | `-i, --input <FILE>` | Custom input dictionary file (`.u8`, `.txt`, `.tsv`) for `--build` |
-| `--dict-dir <DIR>` | Custom directory for compiled `dict.da` and Pinyin `.bin` files |
+| `--dict-dir <DIR>` | Custom directory for compiled `dict.da` |
 | `--debug` | Print debug segmentation and pronunciation details |
 | `-o, --ocr <IMAGE>` | Trigger scan *(requires `--features ocr`)* |
 | `--model <TIER>` | PP-OCRv6 model tier: `medium`, `small` or `tiny` (default: `medium`) |
