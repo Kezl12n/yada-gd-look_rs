@@ -78,10 +78,38 @@ struct Cli {
     #[arg(short= 'o', long, value_name = "IMAGE")]
     ocr: Option<String>,
 
+    /// OCR model tier (tiny, small, medium)
+    #[cfg(feature = "ocr")]
+    #[arg(short = 'm', long, value_enum, default_value_t = OcrModel::Medium)]
+    model: OcrModel,
+
     /// Choose a regional pronunciation standard (pinyin_tw.bin must be built)
     #[arg(long, value_enum, default_value_t = PinyinStd::Cn)]
     pub pinyin_std: PinyinStd,
 }
+
+#[cfg(feature = "ocr")]
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum OcrModel {
+    #[value(name = "tiny")]
+    Tiny,
+    #[value(name = "small")]
+    Small,
+    #[value(name = "medium")]
+    Medium,
+}
+
+#[cfg(feature = "ocr")]
+impl OcrModel {
+    fn as_preset(&self) -> &'static str {
+        match self {
+            OcrModel::Tiny => "ppocrv6-tiny",
+            OcrModel::Small => "ppocrv6-small",
+            OcrModel::Medium => "ppocrv6-medium",
+        }
+    }
+}
+
 
 // Directory path
 fn get_dict_dir(override_dir: Option<PathBuf>) -> PathBuf {
@@ -162,8 +190,9 @@ fn main() {
 
    #[cfg(feature = "ocr")]
    if let Some(image) = cli.ocr {
-       if let Err(e) = features::ocr::ocr_to_goldendict(&image) {
+       if let Err(e) = features::ocr::ocr_to_goldendict(&image,  cli.model.as_preset()) {
           eprintln!("OCR fout: {e}");
+	  std::process::exit(1);
        }
        return;
    }

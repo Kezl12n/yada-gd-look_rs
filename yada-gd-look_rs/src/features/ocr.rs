@@ -1,14 +1,20 @@
 // Basic OCR Support
-use rusto::{DetectTextBuilderExt, DetectTextResult, ImageSource, InitializeConfig, RustO};
+use rusto::download::parse_config_with_auto_download;
+use rusto::{DetectTextBuilderExt, DetectTextResult, ImageSource, RustO };
 use std::process::Command;
 
-pub fn ocr_to_goldendict(img_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn ocr_to_goldendict(img_path: &str, model_preset: &str,) -> Result<(), Box<dyn std::error::Error>> {
     
     rusto::init();
-    let mut ocr = RustO::initialize(InitializeConfig::default())?;
+    
+    let json_cfg = format!(r#"{{"model": "{model_preset}"}}"#);
+    let config = parse_config_with_auto_download(&json_cfg)?;
+    let mut ocr = RustO::initialize(config)?;
+    
 
     let result = ocr
         .detect_text_builder(ImageSource::Path(img_path.into()))
+	.with_layout_reading(true)
         .as_lines()
         .run()?;
 
