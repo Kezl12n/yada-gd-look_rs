@@ -60,10 +60,9 @@ pub fn parse_cedict(
                 // Assemble final order based on Cn vs Tw:
                 let has_tw_pr = !tw_alts.is_empty();
                 if has_tw_pr {
-                    let tw_joined = tw_alts.join(" · ");
-                    match pinyin_std {
-                        PinyinStd::Tw => combined = format!("{tw_joined} · {combined}"),
-                        PinyinStd::Cn => combined = format!("{combined} · {tw_joined}"),
+                    if matches!(pinyin_std, PinyinStd::Tw) {
+		    	let tw_joined = tw_alts.join(" · ");
+                        combined = format!("{tw_joined} · {combined}");
                     }
                 }
 
@@ -71,16 +70,21 @@ pub fn parse_cedict(
                     eprintln!("DEBUG 垃圾: std={:?}, combined={:?}", pinyin_std, combined);
                 }
 
-                let is_multi_char = trad.chars().count() > 1;
+		
+                if debug && simp == "和" {
+                    eprintln!("DEBUG 和: std={:?}, combined={:?}", pinyin_std, combined);
+                }
 
                 // add multiple pinyin readings
                 for key in [trad_norm, simp_norm] {
                     let entry = pinyin_map.entry(key).or_default();
+		    let is_multi_char = trad.chars().count() > 1;
+		    
                     for (idx, r) in combined.split(" · ").enumerate() {
                         if !entry.split(" · ").any(|p| p == r) {
                             if entry.is_empty() {
                                 entry.push_str(r);
-                            } else if idx == 0 && has_tw_pr && is_multi_char {
+                            } else if idx == 0 && has_tw_pr && is_multi_char && matches!(pinyin_std, PinyinStd::Tw) {
                                 // Force Taiwan pronunciation to index 0 even if an earlier line existed
                                 *entry = format!("{r} · {entry}");
                             } else {

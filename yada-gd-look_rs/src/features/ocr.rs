@@ -1,4 +1,4 @@
-// OCR Support
+// OCR Support (PaddleOCR V6)
 use ocr_rs::{OcrEngine, RecognizeOptions, RotatedTextMode};
 use std::process::{Command, Stdio};
 
