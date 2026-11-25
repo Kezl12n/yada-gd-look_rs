@@ -114,9 +114,8 @@ yada-gd-look_rs --word "%GDWORD%" --sentence "%GDSEARCH%"
 | `-i, --input <FILE>` | Custom input dictionary file (`.u8`, `.txt`, `.tsv`) for `--build` |
 | `--dict-dir <DIR>` | Custom directory for compiled `dict.da` and Pinyin `.bin` files |
 | `--debug` | Print debug segmentation and pronunciation details |
-| `-o, --ocr` | Trigger PaddleOCR scan *(requires `--features ocr`)* |
-| `-t, --ocr-tier <TIER>` | PP-OCRv6 model tier: `medium` or `small` (default: `medium`) |
-| `-v, --vertical` | Enable rotated/vertical text detection (`Robust` mode) |
+| `-o, --ocr <IMAGE>` | Trigger scan *(requires `--features ocr`)* |
+| `--model <TIER>` | PP-OCRv6 model tier: `medium`, `small` or `tiny` (default: `medium`) |
 | `--debug` | Print debug segmentation and pronunciation details |
 
 
