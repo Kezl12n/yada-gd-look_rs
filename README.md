@@ -141,9 +141,11 @@ Pass a screenshot path directly to `-o` (or `--ocr`):
 yada-gd-look_rs -o /tmp/ocr.png
 ```
 
-#### Linux (Niri / Wayland)
+## Examples /w tools
 
-Bind a one-hotkey drag-to-OCR shortcut (requires `grim` and `slurp`) in `~/.config/niri/config.kdl`:
+#### Linux (Niri / Wayland) 
+
+Bind a one-hotkey drag-to-OCR shortcut (this requires `grim` and `slurp`) in `~/.config/niri/config.kdl`:
 
 ```kdl
 binds {
@@ -169,7 +171,7 @@ screencapture -i /tmp/ocr.png && yada-gd-look_rs -o /tmp/ocr.png
 #### Windows (ShareX)
 
 1. Open **ShareX** → **Task settings** → **After capture tasks** and enable **Save image to file** and **Run external program**.
-2. Point the external program to `yada-gd-look_rs.exe` with arguments `-o "$input"`.
+2. Point the external program to `yada-gd-look_rs.exe` with arguments `-o "$img"`.
 
 ---
 
