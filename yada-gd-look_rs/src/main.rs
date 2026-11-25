@@ -35,7 +35,7 @@ struct Cli {
     #[arg(long)]
     build: bool,
 
-    // For debugging
+    /// For debugging
     #[arg(long)]
     debug: bool,
 

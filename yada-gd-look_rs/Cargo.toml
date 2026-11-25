@@ -24,3 +24,5 @@ ocr = ["dep:ocr-rs", "dep:image", "dep:libwayshot", "dep:anyhow"]
 lto = true
 codegen-units = 1
 strip = true
+
+
