@@ -377,7 +377,6 @@ fn main() {
         Some("hk") => zhconv(&sentence, Variant::ZhHK),
         Some("hant") => zhconv(&sentence, Variant::ZhHant),
         Some("cn") => zhconv(&sentence, Variant::ZhCN),
-        Some("sg") => zhconv(&sentence, Variant::ZhSG),
         _ => sentence,
     };
 
