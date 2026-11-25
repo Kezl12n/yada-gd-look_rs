@@ -89,13 +89,15 @@ yada-gd-look_rs --word "%GDWORD%" --sentence "%GDSEARCH%"
 | `--build` | Build `dict.da` and Pinyin binaries from a source dictionary |
 | `-i, --input <FILE>` | Custom input dictionary file (`.u8`, `.txt`, `.tsv`) for `--build` |
 | `--dict-dir <DIR>` | Custom directory for compiled `dict.da` and Pinyin `.bin` files |
-| `--pp-ocr` | Trigger PaddleOCR scan *(requires `--features ocr`)* |
+| `--debug` | Print debug segmentation and pronunciation details |
+| `-o, --ocr` | Trigger PaddleOCR scan *(requires `--features ocr`)* |
+| `-t, --ocr-tier <TIER>` | PP-OCRv6 model tier: `medium` or `small` (default: `medium`) |
+| `-v, --vertical` | Enable rotated/vertical text detection (`Robust` mode) |
 | `--debug` | Print debug segmentation and pronunciation details |
 
 
 
-
-## OCR Setup (Optional yet incomplete)
+## OCR Setup (Optional)
 
 Place PP-OCRv6 `.mnn` detection/recognition models and charset files inside `models/` (ignored by Git):
 
@@ -104,6 +106,16 @@ models/
 ├── PP-OCRv6_medium_det.mnn
 ├── PP-OCRv6_medium_rec.mnn
 └── ppocr_keys_v6_medium.txt
+```
+
+### OCR Hotkey Usage
+
+Bind any of these commands to a global desktop shortcut:
+
+```bash
+yada-gd-look_rs -o             # Standard horizontal OCR (medium tier)
+yada-gd-look_rs -ov            # Vertical / rotated text OCR (Robust mode)
+yada-gd-look_rs -ov -t small   # Vertical OCR using the small model tier
 ```
 
 ---
