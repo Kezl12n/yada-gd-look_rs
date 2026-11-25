@@ -11,6 +11,8 @@ use zhconv::{Variant, zhconv};
 mod features;
 mod parsers;
 
+
+
 const CSS: &str = include_str!("style.css");
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, Default, PartialEq)]
@@ -71,20 +73,10 @@ struct Cli {
     #[arg(long)]
     pinyin: bool,
 
-    /// Trigger OCR Scan
+    /// Trigger OCR Scan (Path to the screenshot image)
     #[cfg(feature = "ocr")]
-    #[arg(short= 'o', long)]
-    pub ocr: bool,
-
-    /// Choose by model (default: medium)
-    #[cfg(feature = "ocr")]
-    #[arg(short = "t", long)]
-    ocr_tier: String,
-
-    // Ensuring it works with vertical images
-    #[cfg(feature = "ocr")]
-    #[arg(short = "v", long)]
-    vertical: bool,
+    #[arg(short= 'o', long, value_name = "IMAGE")]
+    ocr: Option<String>,
 
     /// Choose a regional pronunciation standard (pinyin_tw.bin must be built)
     #[arg(long, value_enum, default_value_t = PinyinStd::Cn)]
@@ -166,7 +158,16 @@ fn has_tone_marks(pinyin: &str) -> bool {
 
 // Main
 fn main() {
-    let cli = Cli::parse();
+   let cli = Cli::parse();
+
+   #[cfg(feature = "ocr")]
+   if let Some(image) = cli.ocr {
+       if let Err(e) = features::ocr::ocr_to_goldendict(&image) {
+          eprintln!("OCR fout: {e}");
+       }
+       return;
+   }
+
 
     // for specific pinyin.bin files
     let py_file = match cli.pinyin_std {
@@ -174,15 +175,7 @@ fn main() {
         PinyinStd::Tw => "pinyin_tw.bin",
     };
 
-    // Start OCR extension
-    #[cfg(feature = "ocr")]
-    if cli.ocr {
-        if let Err(e) = features::ocr::trigger_ocr(&cli.ocr_tier) {
-	   eprintln!("OCR failed: {e}");
-	}
-        return;
-    }
-
+   
     // dict content
     let mut words: Vec<String> = Vec::new();
     let mut pinyin_map = std::collections::HashMap::new();
