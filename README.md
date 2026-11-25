@@ -141,38 +141,57 @@ models/
 └── ppocr_keys_v6_medium.txt
 ```
 
-### OCR Hotkey Usage
+## OCR Setup (Optional)
 
-Bind any of these commands to a global desktop shortcut:
+`yada-gd-look_rs` includes an optional pure-Rust PaddleOCR (`rusto-rs`) integration that extracts Simplified and Traditional Chinese text (both horizontal and vertical) from a screenshot and sends it directly to GoldenDict-ng without cluttering your clipboard.
+
+### 1. Build with OCR Support
+
+The OCR feature is disabled by default to keep the base binary lightweight. Enable it at compile time:
 
 ```bash
-yada-gd-look_rs -o             # Standard horizontal OCR (medium tier)
-yada-gd-look_rs -ov            # Vertical / rotated text OCR (Robust mode)
-yada-gd-look_rs -ov -t small   # Vertical OCR using the small model tier
+cargo build --release --features ocr
 ```
 
----
+> **Note:** On the first run, `rusto-rs` automatically downloads and caches the `ppocrv6-small` model (~30.5 MB, 18,708-character vocabulary supporting both Simplified & Traditional Chinese) to your local cache directory. No manual model setup is required.
 
-`yada-gd-look_rs -o` reads the latest screenshot directly from your system clipboard, runs OCR, and sends the recognized text straight to GoldenDict-ng.
+### 2. OCR Hotkey Usage
+
+Pass a screenshot path directly to `-o` (or `--ocr`):
+
+```bash
+yada-gd-look_rs -o /tmp/ocr.png
+```
 
 #### Linux (Niri / Wayland)
-* **One-hotkey drag-to-OCR** (requires `grim`, `slurp`, and `wl-clipboard`) in `~/.config/niri/config.kdl`:
-  ```kdl
-  binds {
-      // Horizontal text OCR
-      Mod+O { spawn "sh" "-c" "grim -g \"\$(slurp)\" - | wl-copy && yada-gd-look_rs -o"; }
 
-      // Vertical / rotated text OCR
-      Mod+Shift+O { spawn "sh" "-c" "grim -g \"\$(slurp)\" - | wl-copy && yada-gd-look_rs -ov"; }
-  }
-  ```
-* **General desktop (GNOME / KDE / X11):** Take a region screenshot to your clipboard using your normal screenshot shortcut, then run `yada-gd-look_rs -o` (or `-ov` for vertical text).
+Bind a one-hotkey drag-to-OCR shortcut (requires `grim` and `slurp`) in `~/.config/niri/config.kdl`:
 
-#### Windows
-1. Press **`Win + Shift + S`** and drag a box around the text to copy it to your clipboard.
-2. Run `yada-gd-look_rs.exe -o` (or `-ov` for vertical text).
-   * **Tip:** Create a desktop shortcut to `yada-gd-look_rs.exe`, append `-o` to the **Target** field, set **Start in** to the folder containing `models/`, and assign a **Shortcut key** (e.g., `Ctrl + Alt + O`) in **Properties**.
+```kdl
+binds {
+    // Screenshot region and send recognized Chinese text straight to GoldenDict-ng
+    Mod+O { spawn "sh" "-c" "grim -g \"\$(slurp)\" /tmp/ocr.png && yada-gd-look_rs -o /tmp/ocr.png"; }
+}
+```
 
+#### General Desktop (GNOME / KDE / X11)
+
+Bind a custom global shortcut to capture a region to a temp file and run OCR:
+
+```bash
+flameshot gui -r > /tmp/ocr.png && yada-gd-look_rs -o /tmp/ocr.png
+```
+
+#### macOS
+
+```bash
+screencapture -i /tmp/ocr.png && yada-gd-look_rs -o /tmp/ocr.png
+```
+
+#### Windows (ShareX)
+
+1. Open **ShareX** → **Task settings** → **After capture tasks** and enable **Save image to file** and **Run external program**.
+2. Point the external program to `yada-gd-look_rs.exe` with arguments `-o "$input"`.
 
 ---
 
