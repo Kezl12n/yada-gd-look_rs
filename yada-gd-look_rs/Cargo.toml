@@ -11,14 +11,16 @@ yada = "0.7.0"
 zhconv = "0.4.2"
 
 
-ocr-rs = { version = "2.4.1", optional = true }
+ocr-rs = { version = "2.4.1", optional = true, features = ["vulkan"] }
 image = { version = "0.25.10", optional = true }
-libwayshot = { version = "0.10.0", optional = true }
+arboard = { version = "3.7.0", optional = true }
 anyhow = { version = "1.0.105", optional = true }
+
 
 [features]
 default = []
-ocr = ["dep:ocr-rs", "dep:image", "dep:libwayshot", "dep:anyhow"]
+ocr = ["dep:ocr-rs", "dep:image", "dep:arboard", "dep:anyhow"]
+
 
 [profile.release]
 lto = true

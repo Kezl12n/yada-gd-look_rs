@@ -71,10 +71,20 @@ struct Cli {
     #[arg(long)]
     pinyin: bool,
 
-    /// Trigger PaddleOCR Scan
+    /// Trigger OCR Scan
     #[cfg(feature = "ocr")]
-    #[arg(long)]
-    pp_ocr: bool,
+    #[arg(short= 'o', long)]
+    pub ocr: bool,
+
+    /// Choose by model (default: medium)
+    #[cfg(feature = "ocr")]
+    #[arg(short = "t", long)]
+    ocr_tier: String,
+
+    // Ensuring it works with vertical images
+    #[cfg(feature = "ocr")]
+    #[arg(short = "v", long)]
+    vertical: bool,
 
     /// Choose a regional pronunciation standard (pinyin_tw.bin must be built)
     #[arg(long, value_enum, default_value_t = PinyinStd::Cn)]
@@ -167,7 +177,9 @@ fn main() {
     // Start OCR extension
     #[cfg(feature = "ocr")]
     if cli.ocr {
-        features::gsm::trigger_ocr();
+        if let Err(e) = features::ocr::trigger_ocr(&cli.ocr_tier) {
+	   eprintln!("OCR failed: {e}");
+	}
         return;
     }
 
@@ -273,7 +285,7 @@ fn main() {
                                     }
                                     entry.push_str(py);
                                 }
-                            }
+                           }
                         }
                     }
                 }

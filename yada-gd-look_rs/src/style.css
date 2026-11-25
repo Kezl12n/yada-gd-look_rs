@@ -36,7 +36,7 @@
     transition: opacity 0.14s ease, transform 0.14s ease;
     pointer-events: none;
     background: #141414;
-    color: #f5f5f5;
+    # color: #f5f5f5;
     border: 1px solid #3a3a3a;
     padding: 1px 5px;
     border-radius: 4px;
