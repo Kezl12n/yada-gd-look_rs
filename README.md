@@ -120,27 +120,6 @@ yada-gd-look_rs --word "%GDWORD%" --sentence "%GDSEARCH%"
 | `--debug` | Print debug segmentation and pronunciation details |
 
 
-
-## OCR Setup (Optional)
-`yada-gd-look_rs` includes an optional **PaddleOCR (PP-OCRv6/ocr-rs)** integration that reads screenshots directly from your clipboard and opens the recognized text in GoldenDict-ng.
-
-### 1. Build with OCR Support
-The OCR feature is disabled by default to keep the base binary lightweight. Enable it at compile time:
-
-```bash
-cargo build --release --features ocr
-```
-
-
-Place PP-OCRv6 `.mnn` detection/recognition models and charset files inside `models/` 
-
-```text
-models/
-├── PP-OCRv6_medium_det.mnn
-├── PP-OCRv6_medium_rec.mnn
-└── ppocr_keys_v6_medium.txt
-```
-
 ## OCR Setup (Optional)
 
 `yada-gd-look_rs` includes an optional pure-Rust PaddleOCR (`rusto-rs`) integration that extracts Simplified and Traditional Chinese text (both horizontal and vertical) from a screenshot and sends it directly to GoldenDict-ng without cluttering your clipboard.
