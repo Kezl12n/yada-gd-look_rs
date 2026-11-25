@@ -8,17 +8,24 @@ use yada::builder::DoubleArrayBuilder;
 use zhconv::{Variant, zhconv};
 
 // local files
+mod features;
 mod parsers;
-use parsers::pinyin_to_toned;
 
 const CSS: &str = include_str!("style.css");
 
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Default, PartialEq)]
+pub enum PinyinStd {
+    #[default]
+    Cn, // Mainland Putonghua (default)
+    Tw, // Taiwan Guoyu
+}
 
 #[derive(Parser)]
 #[command(
     name = "yada-gd-look",
     about = "Ultra-fast Mandarin & Double-Array Trie lookup"
 )]
+
 struct Cli {
     /// Remove spacing
     #[arg(long)]
@@ -63,6 +70,15 @@ struct Cli {
     /// Show tone-marked Pinyin above Chinese words using <ruby> tags
     #[arg(long)]
     pinyin: bool,
+
+    /// Trigger PaddleOCR Scan
+    #[cfg(feature = "ocr")]
+    #[arg(long)]
+    pp_ocr: bool,
+
+    /// Switch reading priority based on the selected nation
+    #[arg(long, value_enum, default_value_t = PinyinStd::Cn)]
+    pub pinyin_std: PinyinStd,
 }
 
 // Directory path
@@ -96,7 +112,7 @@ fn is_cjk(c: char) -> bool {
         '\u{4E00}'..='\u{9FFF}'   // CJK Unified Ideographs (Main)
         | '\u{3400}'..='\u{4DBF}' // CJK Extension A (Rare characters)
         | '\u{F900}'..='\u{FAFF}' // CJK Compatibility Ideographs
-    | '\u{20000}'..='\u{323AF}' // CJK Extensions B–I
+        | '\u{20000}'..='\u{323AF}' // CJK Extensions B–I
     )
 }
 
@@ -141,6 +157,13 @@ fn has_tone_marks(pinyin: &str) -> bool {
 // Main
 fn main() {
     let cli = Cli::parse();
+
+    // Start OCR extension
+    #[cfg(feature = "ocr")]
+    if cli.ocr {
+        features::gsm::trigger_ocr();
+        return;
+    }
 
     // dict content
     let mut words: Vec<String> = Vec::new();
@@ -191,22 +214,7 @@ fn main() {
         for path in &files_to_read {
             // StarDict (.idx) support
             if path.extension().is_some_and(|e| e == "idx") {
-                if let Ok(bytes) = fs::read(path) {
-                    let mut i = 0;
-                    while let Some(nul) = bytes[i..].iter().position(|&b| b == 0) {
-                        if let Ok(w) = std::str::from_utf8(&bytes[i..i + nul]) {
-                            let w = w.trim();
-                            if !w.is_empty() {
-                                words.push(w.to_ascii_lowercase());
-                            }
-                        }
-                        i += nul + 9; // 1 byte '\0' + 4-byte offset + 4-byte size
-                    }
-
-                    if cli.debug {
-                        eprintln!("Loaded (.idx): {:?}", path.file_name().unwrap_or_default());
-                    }
-                }
+                parsers::stardict::parse_idx(path, &mut words, cli.debug);
                 continue;
             }
 
@@ -230,42 +238,17 @@ fn main() {
                     continue;
                 }
 
-                // Skip commentator in CC-CEDICT
                 if in_yaml || line.is_empty() || line.starts_with('#') {
                     continue;
                 }
 
-                // Special for CC-CEDICT format: Traditional Simplified [pinyin] /def/
-                if line.contains('[') && line.contains('/') {
-                    let mut parts = line.split_whitespace();
-                    if let (Some(trad), Some(simp)) = (parts.next(), parts.next()) {
-                        // mixed script support
-                        let trad_norm = trad.to_ascii_lowercase();
-                        let simp_norm = simp.to_ascii_lowercase();
-
-                        words.push(trad_norm.clone());
-                        words.push(simp_norm.clone());
-
-                        // Extract `[pinyin]` and convert numbers to tone marks
-                        if let Some((_, rest)) = line.split_once('[') {
-                            if let Some((raw_pinyin, _)) = rest.split_once(']') {
-                                let toned = pinyin_to_toned(raw_pinyin);
-                                // add multiple pinyin readings
-                                for key in [trad_norm, simp_norm] {
-                                    pinyin_map
-                                        .entry(key)
-                                        .and_modify(|existing: &mut String| {
-                                            if !existing.split(" · ").any(|p| p == toned) {
-                                                existing.push_str(" · ");
-                                                existing.push_str(&toned);
-                                            }
-                                        })
-                                        .or_insert_with(|| toned.clone());
-                                }
-                            }
-                        }
-                    }
-                } else {
+                if !parsers::cedict::parse_cedict(
+                    &line,
+                    &mut words,
+                    &mut pinyin_map,
+                    cli.pinyin_std,
+		    cli.debug
+                ) {
                     // Rime .dict.yaml, TSV, or plain wordlist (word\tpinyin\tfreq) (index 0)
                     let mut cols = line.split('\t');
                     let w = cols.next().unwrap_or("").trim();
@@ -277,7 +260,13 @@ fn main() {
                         if let Some(py) = cols.next().map(str::trim).filter(|s| !s.is_empty()) {
                             if has_tone_marks(py) {
                                 // filter by tone marks
-                                pinyin_map.insert(key, py.to_string());
+                                let entry = pinyin_map.entry(key).or_default();
+                                if !entry.split(" · ").any(|p| p == py) {
+                                    if !entry.is_empty() {
+                                        entry.push_str(" · ");
+                                    }
+                                    entry.push_str(py);
+                                }
                             }
                         }
                     }
@@ -413,10 +402,9 @@ fn main() {
 
                 // for ordering and deduplicating subwords
                 let mut subs: Vec<&str> = Vec::new();
-             
-	
+
                 if seen_boxes.insert(full_word) {
-		    // sub wrapper
+                    // sub wrapper
                     subwords_html.push_str("<div class=\"token-box\">");
                     subwords_html.push_str(&format_token(full_word, cli.pinyin, &pinyin_map));
 

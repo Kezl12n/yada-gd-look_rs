@@ -18,6 +18,7 @@
         
         nativeBuildInputs = [ pkgs.pkg-config ];
         buildInputs = [ pkgs.zstd ];
+        buildFeatures = [];
         
         cargoLock = {
           lockFile = src + "/Cargo.lock";

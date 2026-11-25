@@ -1,2 +1,3 @@
-mod num_tone;
-pub use num_tone::pinyin_to_toned;
+pub mod cedict;
+pub mod num_tone;
+pub mod stardict;
