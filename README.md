@@ -1,6 +1,6 @@
 # yada-gd-look_rs
 
-A fast, zero-bloat Mandarin Chinese companion for **GoldenDict-ng**, written in Rust.
+A fast, zero-bloat Mandarin Chinese lookup engine for **GoldenDict-ng**, written in Rust.
 
 ## Design Principles
 
@@ -14,8 +14,6 @@ A fast, zero-bloat Mandarin Chinese companion for **GoldenDict-ng**, written in 
 * **Dictionary-Backed Sentence Segmentation:** Segments full sentences against your compiled `yada` trie so every clickable token matches real dictionary headwords.
 * **Clean CN / TW Pinyin Standards:** Separate `pinyin.bin` and `pinyin_tw.bin` builds parsed from CC-CEDICT keeping Mainland readings unpolluted by Taiwan variants (`和` -> `hé · hè · hú · huó · huò`, `垃圾` -> `lā jī`) while preserving dedicated Taiwan pronunciation ordering (`hàn`, `lè sè`).
 ---
-
-
 
 ## Quick Start 
 
@@ -43,8 +41,12 @@ A fast, zero-bloat Mandarin Chinese companion for **GoldenDict-ng**, written in 
 
 > **Note (CC-CEDICT):** Pass `--pinyin-std cn` or `--pinyin-std tw` to choose pronunciation behavior (`cn` excludes Taiwan pronunciations; `tw` includes both and prioritizes Taiwan).
 
+#### Supported Input Formats
+* **Dictionaries with Pinyin:** CC-CEDICT (`.u8`), plain text (`.txt`), and `.tsv` files containing **tone-marked Pinyin** (`hé`, `lā jī`) or **numbered Pinyin** (`he2`, `la1 ji1`).
+* **Headword-Only Dictionaries (No Pinyin):** **StarDict** dictionaries and **RIME
 
-### Pinyin Extraction & Fallback (`pinyin.bin` / `pinyin_tw.bin`)
+
+#### Pinyin Extraction & Fallback (`pinyin.bin` / `pinyin_tw.bin`)
 
 During `--build`, `yada-gd-look_rs` extracts and normalizes pronunciations directly from your supported dictionaries:
 
@@ -175,5 +177,5 @@ yada-gd-look_rs -ov -t small   # Vertical OCR using the small model tier
 ---
 
 ## Credits
-* **[`gd-marisa`](https://github.com/Ajatt-Tools/gd-tools#gd-marisa) (Functionality & Architecture):** Inspired by `gd-marisa`'s trie-backed sentence segmentation and clickable headword lookup workflow—rebuilt in pure Rust using Double-Array tries (`yada`) + `mmap` for microsecond Mandarin prefix matching with zero startup overhead.
+* **[`gd-marisa`](https://github.com/Ajatt-Tools/gd-tools#gd-marisa) (Functionality & Architecture):** Inspired by `gd-marisa`'s trie-backed sentence segmentation and clickable headword lookup workflow rebuilt in pure Rust using Double-Array tries (`yada`) + `mmap` for microsecond Mandarin prefix matching with zero startup overhead.
 * **[`gd-mandarin`](https://github.com/Ajatt-Tools/gd-tools#gd-mandarin) (Design & Layout):** The model of basic prototype.
