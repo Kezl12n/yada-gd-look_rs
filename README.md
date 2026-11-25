@@ -181,6 +181,7 @@ screencapture -i /tmp/ocr.png && yada-gd-look_rs -o /tmp/ocr.png
 
 ---
 
-## Credits
-* **[`gd-marisa`](https://github.com/Ajatt-Tools/gd-tools#gd-marisa) (Functionality & Architecture):** Inspired by `gd-marisa`'s trie-backed sentence segmentation and clickable headword lookup workflow rebuilt in pure Rust using Double-Array tries (`yada`) + `mmap` for microsecond Mandarin prefix matching with zero startup overhead.
-* **[`gd-mandarin`](https://github.com/Ajatt-Tools/gd-tools#gd-mandarin) (Design & Layout):** The model of basic prototype.
+## Credits & Acknowledgments
+Special thanks to the developers for their awesome work on:
+* **[`gd-marisa`](https://github.com/Ajatt-Tools/gd-tools#gd-marisa) (Functionality & Architecture):** For causing inspiration behind the sentence segmentation and headword lookup functionality.
+* **[`gd-mandarin`](https://github.com/Ajatt-Tools/gd-tools#gd-mandarin) (Design & Layout):** For the design and layout used as a beginning model.
