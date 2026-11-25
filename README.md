@@ -19,14 +19,15 @@ A fast, zero-bloat Mandarin Chinese companion for **GoldenDict-ng**, written in 
 
 > **Nix / Flake Tip:** There are optional features included in the flake's default e.g. `buildFeatures = [ "ocr" ];`. If you want a base build **without** optional dependencies, override it in your flake:
 > ```nix
-> yada-gd-look_rs.overrideAttrs {
->   buildNoDefaultFeatures = true;
->   buildFeatures = [ ];
-> }
+> # Minimal build (no features)
+> yada-gd-look_rs.override { features = [ ]; }
+>
+> # Select specific features
+> yada-gd-look_rs.override { features = [ "ocr" "other-feature" ]; }
 > ```
 
 
-### 1. Build Dictionary & Pinyin `.bin` Files (`dict.da`)
+### 1. Build Headword dictionary (`dict.da`) & Pinyin `.bin` Files 
 
 1. **Default (`dicts/` directory):** Drop all your source dictionary files (`.u8`, `.txt`, `.tsv`) into the `dicts/` folder and run:
    ```bash
@@ -38,7 +39,8 @@ A fast, zero-bloat Mandarin Chinese companion for **GoldenDict-ng**, written in 
    ```
 3. **Embedded Fallback (`src/words.txt`):** Compiles from the built-in `src/words.txt` wordlist when no external dictionary files are supplied.
 
-*(Pass `--pinyin-std cn` or `--pinyin-std tw` and `--dict-dir <PATH>` to cu
+> **Note (CC-CEDICT):** Pass `--pinyin-std cn` or `--pinyin-std tw` to choose pronunciation behavior (`cn` excludes Taiwan pronunciations; `tw` includes both and prioritizes Taiwan).
+
 
 ### 2. Debug Segmentation & Pinyin Output
 
