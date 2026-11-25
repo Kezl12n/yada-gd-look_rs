@@ -108,7 +108,7 @@ yada-gd-look_rs --word "%GDWORD%" --sentence "%GDSEARCH%"
 | `--subwords` | Emit all overlapping dictionary subwords inside compounds |
 | `--mono` | Split into single characters for Classical Chinese (*文言文*) |
 | `--no-space` | Remove spacing between segmented tokens |
-| `--conv <MODE>` | Optional Traditional/Simplified Chinese conversion mode (default: `none`) |
+| `--conv <Cn\Cn-Trad\|Tw\|Hk>` | Optional Traditional/Simplified Chinese conversion mode (default: `none`) |
 | `--pinyin-std <cn\|tw>` | Select Mainland PRC or Taiwan pronunciation standard |
 | `--build` | Build `dict.da` and Pinyin binaries from a source dictionary |
 | `-i, --input <FILE>` | Custom input dictionary file (`.u8`, `.txt`, `.tsv`) for `--build` |
