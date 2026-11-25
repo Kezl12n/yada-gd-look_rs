@@ -4,8 +4,8 @@ A fast, zero-bloat Mandarin Chinese companion for **GoldenDict-ng**, written in 
 
 ## Philosophy
 
-* **Zero Bloat (`yada` + `mmap`):** No 8 GiB Python/PyTorch environments or sluggish background daemons. Dictionaries are compiled ahead of time into memory-mapped Double-Array tries (`yada`), delivering microsecond segmentation and ~0 ms startup latency.
-* **Cross-Strait & Classical Aware:** Clean separation between Mainland PRC (`cn`) and Taiwan (`tw`) pronunciation standards, Simplified/Traditional handling, and a dedicated **mono-character mode** for reading Classical Chinese (*文言文*) without modern word-segmentation interference.
+* **Zero Bloat (`yada` + `mmap`):** Dictionaries are compiled ahead of time into memory-mapped Double-Array tries (`yada`), delivering microsecond segmentation and ~0 ms startup latency.
+* **Cross-Strait & Classical Aware:** Includes Simplified/Traditional conversion, and a dedicated **mono-character mode** for reading Classical Chinese (*文言文*) without modern word-segmentation interference.
 * **Reproducible:** Declaratively built and packaged with **Nix flakes**.
 
 ---
@@ -14,6 +14,8 @@ A fast, zero-bloat Mandarin Chinese companion for **GoldenDict-ng**, written in 
 * **Dictionary-Backed Sentence Segmentation:** Segments full sentences against your compiled `yada` trie so every clickable token matches real dictionary headwords.
 * **Clean CN / TW Pinyin Standards:** Separate `pinyin.bin` and `pinyin_tw.bin` builds parsed from CC-CEDICT keeping Mainland readings unpolluted by Taiwan variants (`和` -> `hé · hè · hú · huó · huò`, `垃圾` -> `lā jī`) while preserving dedicated Taiwan pronunciation ordering (`hàn`, `lè sè`).
 ---
+
+
 
 ## Quick Start 
 
@@ -40,6 +42,15 @@ A fast, zero-bloat Mandarin Chinese companion for **GoldenDict-ng**, written in 
 3. **Embedded Fallback (`src/words.txt`):** Compiles from the built-in `src/words.txt` wordlist when no external dictionary files are supplied.
 
 > **Note (CC-CEDICT):** Pass `--pinyin-std cn` or `--pinyin-std tw` to choose pronunciation behavior (`cn` excludes Taiwan pronunciations; `tw` includes both and prioritizes Taiwan).
+
+
+### Pinyin Extraction & Fallback (`pinyin.bin` / `pinyin_tw.bin`)
+
+During `--build`, `yada-gd-look_rs` extracts and normalizes pronunciations directly from your supported dictionaries:
+
+* **Supported Dictionary Pinyin:** Automatically parses and normalizes entries that already contain **tone-marked Pinyin** (e.g., `hé`, `lā jī`) or **numbered Pinyin** (e.g., `he2`, `la1 ji1`), preserving multi-pronunciation ordering and regional (`cn` vs `tw`) variants.
+* **`pinyin-converter` Fallback:** If a dictionary entry has no Pinyin column or uses an unsupported phonetic format (such as Zhuyin/Bopomofo) `yada-gd-look_rs` automatically falls back to **`pinyin-converter`** to generate tone-marked Pinyin from the Chinese characters so every headword still gets pronunciation coverage.
+
 
 
 ### 2. Debug Segmentation & Pinyin Output
