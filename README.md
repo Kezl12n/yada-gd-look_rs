@@ -2,7 +2,10 @@
 
 A fast, zero-bloat Mandarin Chinese lookup engine for **GoldenDict-ng**, written in Rust.
 
+<img width="900" height="203" alt="demo" src="https://github.com/user-attachments/assets/2f2e1567-a670-4ed6-863c-e6414742a52e" />
+
 ## Design Principles
+
 
 * **Zero Bloat (`yada` + `mmap`):** Dictionaries are compiled ahead of time into memory-mapped Double-Array tries (`yada`), delivering microsecond segmentation and ~0 ms startup latency.
 * **Cross-Strait & Classical Aware:** Includes Simplified/Traditional conversion, and a dedicated **mono-character mode** for reading Classical Chinese (*文言文*) without modern word-segmentation interference.
@@ -43,7 +46,7 @@ A fast, zero-bloat Mandarin Chinese lookup engine for **GoldenDict-ng**, written
 
 #### Supported Input Formats
 * **Dictionaries with Pinyin:** CC-CEDICT (`.u8`), plain text (`.txt`), and `.tsv` files containing **tone-marked Pinyin** (`hé`, `lā jī`) or **numbered Pinyin** (`he2`, `la1 ji1`).
-* **Headword-Only Dictionaries (No Pinyin):** **StarDict** dictionaries and **RIME
+* **Headword-Only Dictionaries (No Pinyin):** **StarDict** (.idx) dictionaries and **RIME Schemas** (dict.yaml) are supported, yet most of them may not include a supported pinyin format. 
 
 
 #### Pinyin Extraction & Fallback (`pinyin.bin` / `pinyin_tw.bin`)
@@ -108,7 +111,7 @@ yada-gd-look_rs --word "%GDWORD%" --sentence "%GDSEARCH%"
 | `--subwords` | Emit all overlapping dictionary subwords inside compounds |
 | `--mono` | Split into single characters for Classical Chinese (*文言文*) |
 | `--no-space` | Remove spacing between segmented tokens |
-| `--conv <Cn\Cn-Trad\|Tw\|Hk>` | Optional Traditional/Simplified Chinese conversion mode (default: `none`) |
+| `--conv <Cn\|Cn-Trad\|Tw\|Hk>` | Optional Traditional/Simplified Chinese conversion mode (default: `none`) |
 | `--pinyin-std <cn\|tw>` | Select Mainland PRC or Taiwan pronunciation standard |
 | `--build` | Build `dict.da` and Pinyin binaries from a source dictionary |
 | `-i, --input <FILE>` | Custom input dictionary file (`.u8`, `.txt`, `.tsv`) for `--build` |
