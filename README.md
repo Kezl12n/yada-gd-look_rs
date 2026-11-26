@@ -120,6 +120,7 @@ yada-gd-look_rs --word "%GDWORD%" --sentence "%GDSEARCH%"
 | `-o, --ocr <IMAGE>` | Trigger scan *(requires `--features ocr`)* |
 | `--model <TIER>` | PP-OCRv6 model tier: `medium`, `small` or `tiny` (default: `medium`) |
 | `--debug` | Print debug segmentation and pronunciation details |
+| `-v, --vertical` | Ensure vertical reading is always enabled |
 
 
 ## OCR Setup (Optional)

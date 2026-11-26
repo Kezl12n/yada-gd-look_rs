@@ -8,10 +8,9 @@ use yada::builder::DoubleArrayBuilder;
 use zhconv::{Variant, zhconv};
 
 // local files
+mod char_handler;
 mod features;
 mod parsers;
-
-
 
 const CSS: &str = include_str!("style.css");
 
@@ -75,7 +74,7 @@ struct Cli {
 
     /// Trigger OCR Scan (Path to the screenshot image)
     #[cfg(feature = "ocr")]
-    #[arg(short= 'o', long, value_name = "IMAGE")]
+    #[arg(short = 'o', long, value_name = "IMAGE")]
     ocr: Option<String>,
 
     /// OCR model tier (tiny, small, medium)
@@ -86,6 +85,10 @@ struct Cli {
     /// Choose a regional pronunciation standard (pinyin_tw.bin must be built)
     #[arg(long, value_enum, default_value_t = PinyinStd::Cn)]
     pub pinyin_std: PinyinStd,
+
+    /// Start in vertical reading mode by default
+    #[arg(short, long)]
+    vertical: bool,
 }
 
 #[cfg(feature = "ocr")]
@@ -109,7 +112,6 @@ impl OcrModel {
         }
     }
 }
-
 
 // Directory path
 fn get_dict_dir(override_dir: Option<PathBuf>) -> PathBuf {
@@ -186,17 +188,16 @@ fn has_tone_marks(pinyin: &str) -> bool {
 
 // Main
 fn main() {
-   let cli = Cli::parse();
+    let cli = Cli::parse();
 
-   #[cfg(feature = "ocr")]
-   if let Some(image) = cli.ocr {
-       if let Err(e) = features::ocr::ocr_to_goldendict(&image,  cli.model.as_preset()) {
-          eprintln!("OCR fout: {e}");
-	  std::process::exit(1);
-       }
-       return;
-   }
-
+    #[cfg(feature = "ocr")]
+    if let Some(image) = cli.ocr {
+        if let Err(e) = features::ocr::ocr_to_goldendict(&image, cli.model.as_preset()) {
+            eprintln!("OCR fout: {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
 
     // for specific pinyin.bin files
     let py_file = match cli.pinyin_std {
@@ -204,7 +205,6 @@ fn main() {
         PinyinStd::Tw => "pinyin_tw.bin",
     };
 
-   
     // dict content
     let mut words: Vec<String> = Vec::new();
     let mut pinyin_map = std::collections::HashMap::new();
@@ -307,7 +307,7 @@ fn main() {
                                     }
                                     entry.push_str(py);
                                 }
-                           }
+                            }
                         }
                     }
                 }
@@ -481,62 +481,10 @@ fn main() {
             }
             pos += byte_len;
         } else {
-            // Grab 1 UTF-8 character
-            let first_char = remains.chars().next().unwrap();
-
-            if first_char.is_ascii_alphanumeric() {
-                // Count total bytes of all consecutive English letters or digits (e.g. "Rust" or "2026")
-                let ascii_len: usize = remains
-                    .chars()
-                    // iterate only alphanumeric characters
-                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '-')
-                    .map(|c| c.len_utf8())
-                    .sum();
-
-                let ascii_word = &remains[..ascii_len];
-                sentence_html.push_str(&format!("<a href=\"gdlookup:{0}\">{0}</a> ", ascii_word));
-
-                if cli.debug {
-                    eprintln!("[ASCII], '{}'", ascii_word);
-                }
-
-                pos += ascii_len; // jump forward by latin characters
-            }
-            // Bring all emojis! (starting with the cyclone)
-            else if (first_char as u32) >= 0x1F300 {
-                sentence_html.push_str(&format!("<a href=\"gdlookup:{0}\">{0}</a> ", first_char));
-                pos += first_char.len_utf8();
-            }
-            // Bring the question/exclamation marks in!
-            else if matches!(first_char, '?' | '？' | '!' | '！') {
-                let encoded = match first_char {
-                    '?' => "%3F".to_string(),
-                    _ => first_char.to_string(),
-                };
-                sentence_html.push_str(&format!(
-                    "<a href=\"gdlookup:{}\">{}</a>",
-                    encoded, first_char
-                ));
-                pos += first_char.len_utf8();
-            } else {
-                // For hanzi characters & punctuation (important for mono)
-                if !first_char.is_whitespace()
-                    && !first_char.is_ascii_punctuation()
-                    && !"《》 （）！？，。、".contains(first_char)
-                {
-                    sentence_html.push_str(&format_token(
-                        &remains[..first_char.len_utf8()],
-                        cli.pinyin,
-                        &pinyin_map,
-                    ));
-                } else {
-                    sentence_html.push(first_char);
-                }
-                if cli.debug {
-                    eprintln!("[CHAR], '{}'", first_char);
-                }
-                pos += first_char.len_utf8(); // jump forward by 3 or 4 bytes
-            }
+            let (step, html) =
+                char_handler::handle_unmatched(remains, cli.pinyin, &pinyin_map, cli.debug);
+            sentence_html.push_str(&html);
+            pos += step; // jump forward by latin characters (3 or 4 bytes)
         }
     }
 
@@ -546,16 +494,18 @@ fn main() {
         "gd-bal"
     };
 
+    let checked_attr = if cli.vertical { "checked" } else { "" };
+
     // Print final HTML for GoldenDict-ng!
     if !subwords_html.is_empty() {
         println!(
-            r#"<style>{}</style><div class="{}"><div class="sentence">{}</div><div class="subwords">{}</div></div>"#,
-            CSS, wrapper_class, sentence_html, subwords_html
+            r#"<style>{}</style><div class="{}"><label class="v-btn"><input type="checkbox" class="v-toggle" {} hidden>直/横</label><div class="sentence">{}</div><div class="subwords">{}</div></div>"#,
+            CSS, wrapper_class, checked_attr, sentence_html, subwords_html
         );
     } else {
         println!(
-            r#"<style>{}</style><div class="{}"><div class="sentence">{}</div></div>"#,
-            CSS, wrapper_class, sentence_html
+            r#"<style>{}</style><div class="{}"><label class="v-btn"><input type="checkbox" class="v-toggle" {} hidden>直/横</label><div class="sentence">{}</div></div>"#,
+            CSS, wrapper_class, checked_attr, sentence_html
         );
     }
 }

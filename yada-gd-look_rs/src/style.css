@@ -1,7 +1,6 @@
 /* Styling */
 .gd-bal {
     font-size: 1.2em;
-   
 }
 
 .gd-bal a {
@@ -50,6 +49,7 @@
 }
 
 .gd-bal .token-box {
+    writing-mode: horizontal-tb !important;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -116,6 +116,64 @@
 .gd-bal .sentence ruby:first-of-type:hover rt {
   transform: translateX(0) translateY(0);
 }
+
+/* Toggle button styling */
+.v-btn {
+  display: block;
+  width: fit-content;
+  cursor: pointer;
+  padding: 2px 8px;
+  margin-left: auto;
+  margin-bottom: 8px;
+  padding: 2px 8px;
+  border: 1px solid #888;
+  border-radius: 4px;
+  font-size: 12px;
+  user-select: none;
+}
+
+.v-btn:has(.v-toggle:checked) {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: #bbb;
+}
+
+/* Flip .sentence to vertical when checked */
+.v-btn:has(.v-toggle:checked) ~ .sentence {
+  box-sizing: border-box;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-feature-settings: "vert" 1;
+  width: 100%;
+  min-width: 100%;
+  max-height: 82vh;
+  padding: 16px 140px 16px 20px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+
+/* Horizontal pinyin pill floating cleanly to the right of the hovered character */
+.v-btn:has(.v-toggle:checked) ~ .sentence ruby rt,
+.v-btn:has(.v-toggle:checked) ~ .sentence ruby:hover rt {
+  writing-mode: horizontal-tb !important;
+  text-orientation: initial !important;
+  position: absolute;
+  left: 115%;              /* Floats just to the right of the vertical column */
+  top: 50%;
+  transform: translateY(-50%) !important;
+  width: auto !important;
+  height: auto !important;
+  bottom: auto !important;
+  pointer-events: none; 
+  z-index: 999;
+}
+
+
+
+
+
+
 
 
 
