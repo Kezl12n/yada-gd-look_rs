@@ -95,7 +95,7 @@ yada-gd-look_rs --profile classical "之乎者也"
 During `--build`, `yada-gd-look_rs` extracts and normalizes pronunciations directly from your supported dictionaries:
 
 * **Supported Dictionary Pinyin:** Automatically parses and normalizes entries that already contain **tone-marked Pinyin** (e.g., `hé`, `lā jī`) or **numbered Pinyin** (e.g., `he2`, `la1 ji1`), preserving multi-pronunciation ordering and regional (`cn` vs `tw`) variants.
-* **`pinyin-converter` Fallback:** If a dictionary entry has no Pinyin column or uses an unsupported phonetic format (such as Zhuyin/Bopomofo) `yada-gd-look_rs` automatically falls back to **`pinyin-converter`** to generate tone-marked Pinyin from the Chinese characters so every headword still gets pronunciation coverage.
+* **`pinyin-converter`  Fallback:** If a dictionary entry has no Pinyin column or uses an unsupported phonetic format (such as Zhuyin/Bopomofo) `yada-gd-look_rs` automatically falls back to **`pinyin-converter`** to generate tone-marked Pinyin from the Chinese characters so every headword still gets pronunciation coverage. (Although it's slower than the former.)
 
 
 
