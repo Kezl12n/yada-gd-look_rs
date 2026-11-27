@@ -16,9 +16,21 @@ A fast, zero-bloat Mandarin Chinese lookup engine for **GoldenDict-ng**, written
 ## Features
 * **Dictionary-Backed Sentence Segmentation:** Segments full sentences against your compiled `yada` trie so every clickable token matches real dictionary headwords.
 * **Clean CN / TW Pinyin Standards:** Separate `pinyin.bin` and `pinyin_tw.bin` builds parsed from CC-CEDICT keeping Mainland readings unpolluted by Taiwan variants (`和` -> `hé · hè · hú · huó · huò`, `垃圾` -> `lā jī`) while preserving dedicated Taiwan pronunciation ordering (`hàn`, `lè sè`).
+* **Multi-Profile Support (`-P` / `--profile`):** Isolate specialized dictionaries (e.g., `default`, `medical`, `classical`, `slang`) into separate directories and `.da` cache artifacts.
+* **Smart `mtime` Auto-Rebuild:** Automatically detects modified or newly added dictionary files via filesystem modification timestamps (`mtime`) with zero file-hashing overhead.
+* **Multi-Format Parsing:** Supports **Rime YAML dictionaries (`*.dict.yaml`)**, StarDict (`.idx`), CC-CEDICT (`.u8`), and plain-text wordlists (`.txt`).
+
+
+
 ---
 
-## Quick Start 
+## Quick Start
+
+### Installation
+```bash
+cd yada-gd-look_rs
+cargo build --release
+```
 
 > **Nix / Flake Tip:** There are optional features included in the flake's default e.g. `buildFeatures = [ "ocr" ];`. If you want a base build **without** optional dependencies, override it in your flake:
 > ```nix
@@ -29,18 +41,51 @@ A fast, zero-bloat Mandarin Chinese lookup engine for **GoldenDict-ng**, written
 > yada-gd-look_rs.override { features = [ "ocr" "other-feature" ]; }
 > ```
 
+## Directory Layout
+
+By default, dictionaries and compiled caches are stored under `~/.local/share/yada-gd-look/`:
+
+```text
+~/.local/share/yada-gd-look/
+├── dicts/
+│   ├── cn/                 # Mainland (CN) Pinyin sources (e.g., cedict_ts.u8)
+│   ├── tw/                 # Taiwan (TW) Pinyin sources
+│   └── <profile>/          # Profile-specific dictionaries (e.g., default/, medical/)
+└── cache/
+    ├── <profile>.da        # Compiled Double-Array Trie per profile
+    ├── pinyin_cn.bin       # Compiled CN pronunciation map
+    └── pinyin_tw.bin       # Compiled TW pronunciation map
+```
+
 
 ### 1. Build Headword dictionary (`dict.da`) & Pinyin `.bin` Files 
+1. - **Default / Mainland CN (`dicts/cn/`):** Drop your source dictionary files (`.u8`, `.dict.yaml`, `.tsv`, `.txt`, `.idx`) into `~/.local/share/yada-gd-look/dicts/cn/` (or directly into `dicts/` for shared files) and run:
+  ```bash
+  yada-gd-look_rs --build
+  ```
+- **Taiwan TW (`dicts/tw/`):** Place TW-specific sources into `~/.local/share/yada-gd-look/dicts/tw/` and build with:
+  ```bash
+  yada-gd-look_rs --build --pinyin-std tw
+  ```
 
-1. **Default (`dicts/` directory):** Drop all your source dictionary files (`.u8`, `.txt`, `.tsv`) into the `dicts/` folder and run:
+2. **Universal Shared (`dicts/` directory):** Drop shared source files (`.u8`, `.dict.yaml`, `.tsv`, `.txt`, `.idx`) directly into `dicts/` (loaded across all profiles and Pinyin standards), or place specialized files into `dicts/cn/`, `dicts/tw/`, or `dicts/<profile>/`
    ```bash
    yada-gd-look_rs --build
    ```
-2. **Direct Input (`--input`):** Compile a single specific dictionary file directly:
+3. **Direct Input (`--input`):** Compile a single specific dictionary file directly:
    ```bash
    yada-gd-look_rs --build --input /path/to/your/dict
    ```
-3. **Embedded Fallback (`src/words.txt`):** Compiles from the built-in `src/words.txt` wordlist when no external dictionary files are supplied.
+4. **Embedded Fallback (`src/words.txt`):** Compiles from the built-in `src/words.txt` wordlist when no external dictionary files are supplied.
+
+### Use a Custom Dictionary Profile
+Loads dictionaries from `dicts/<profile>/` and caches to `<profile>.da`:
+```bash
+yada-gd-look_rs -P medical "心肌梗死"
+# or
+yada-gd-look_rs --profile classical "之乎者也"
+```
+
 
 > **Note (CC-CEDICT):** Pass `--pinyin-std cn` or `--pinyin-std tw` to choose pronunciation behavior (`cn` excludes Taiwan pronunciations; `tw` includes both and prioritizes Taiwan).
 
@@ -121,6 +166,7 @@ yada-gd-look_rs --word "%GDWORD%" --sentence "%GDSEARCH%"
 | `--model <TIER>` | PP-OCRv6 model tier: `medium`, `small` or `tiny` (default: `medium`) |
 | `--debug` | Print debug segmentation and pronunciation details |
 | `-v, --vertical` | Ensure vertical reading is always enabled |
+| `--profile <NAME>` | `-P` | `default` | Dictionary profile name (`dicts/<profile>/` -> `<profile>.da`). |
 
 
 ## OCR Setup (Optional)
