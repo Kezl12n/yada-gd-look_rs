@@ -142,7 +142,7 @@ yada-gd-look_rs --word "%GDWORD%" --sentence "%GDSEARCH%"
 ---
 
 
-### All CLI Flags
+### CLI Flags
 
 | Flag | Description |
 | :--- | :--- |
@@ -162,7 +162,7 @@ yada-gd-look_rs --word "%GDWORD%" --sentence "%GDSEARCH%"
 | `--model <TIER>` | PP-OCRv6 model tier: `medium`, `small` or `tiny` (default: `medium`) |
 | `--debug` | Print debug segmentation and pronunciation details |
 | `-v, --vertical` | Ensure vertical reading is always enabled |
-| `--profile <NAME>` | `-P` | `default` | Dictionary profile name (`dicts/<profile>/` -> `<profile>.da`). |
+| `-P, --profile <NAME>` | Dictionary profile name (`dicts/<profile>/` -> `<profile>.da`, default: `default`) |
 
 
 ## OCR Setup (Optional)
