@@ -1056,6 +1056,7 @@ checksum = "53c3bb06259642a57b4ea1bf2a8260f7d94b7b78a096c46f193318918d925f61"
 name = "yada-gd-look_rs"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap",
  "memmap2",
  "pinyin-converter",

@@ -2,7 +2,7 @@ use clap::Parser;
 use memmap2::Mmap;
 use pinyin::Pinyin;
 use std::fs::{self, File};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use yada::DoubleArray;
 use yada::builder::DoubleArrayBuilder;
 use zhconv::{Variant, zhconv};
@@ -89,6 +89,42 @@ struct Cli {
     /// Start in vertical reading mode by default
     #[arg(short, long)]
     vertical: bool,
+
+    /// Dictionary profile name (loads dicts/<profile>/ and caches <profile>.da)
+    #[arg(short = 'P', long, default_value = "default")]
+    profile: String,
+}
+
+// use mtime
+fn needs_rebuild(
+    // AsRef = anything that can be cheaply treated as a file system (Path)
+    // IntoIterator = anything to loop,
+    // item = each element yielded by that loop
+    caches: &[impl AsRef<Path>],
+    dict_files: impl IntoIterator<Item = impl AsRef<Path>>,
+) -> bool {
+    let mut oldest_cache = None;
+
+    for cache in caches {
+        let Ok(mtime) = fs::metadata(cache).and_then(|m| m.modified()) else {
+            return true; // cache file doesn't exist yet
+        };
+        oldest_cache = Some(match oldest_cache {
+            Some(prev) if prev < mtime => prev,
+            _ => mtime,
+        });
+    }
+
+    let Some(oldest_cache) = oldest_cache else {
+        return false; // no caches specified
+    };
+
+    dict_files.into_iter().any(|file| {
+        fs::metadata(file)
+            .and_then(|m| m.modified())
+            .map(|mtime| mtime > oldest_cache)
+            .unwrap_or(true)
+    })
 }
 
 #[cfg(feature = "ocr")]
@@ -187,7 +223,7 @@ fn has_tone_marks(pinyin: &str) -> bool {
 }
 
 // Main
-fn main() {
+fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     #[cfg(feature = "ocr")]
@@ -199,54 +235,117 @@ fn main() {
         return;
     }
 
-    // for specific pinyin.bin files
-    let py_file = match cli.pinyin_std {
-        PinyinStd::Cn => "pinyin.bin",
-        PinyinStd::Tw => "pinyin_tw.bin",
-    };
+    // make discoverable no matter what
+    let base_dir = get_dict_dir(cli.dict_dir);
+    let dicts_dir = base_dir.join("dicts");
+
+    let cn_dir = dicts_dir.join("cn");
+    let tw_dir = dicts_dir.join("tw");
 
     // dict content
     let mut words: Vec<String> = Vec::new();
     let mut pinyin_map = std::collections::HashMap::new();
 
-    // make discoverable no matter what
-    let base_dir = get_dict_dir(cli.dict_dir);
-    let da_path = base_dir.join("dict.da");
+    // multi profile (dict.da & pinyin.bin)
+    let (da_path, py_path, profile_dir) = if cli.profile == "default" {
+        // for specific pinyin.bin files
+        let py_file = match cli.pinyin_std {
+            PinyinStd::Cn => "pinyin.bin",
+            PinyinStd::Tw => "pinyin_tw.bin",
+        };
+
+        let sub_dir = match cli.pinyin_std {
+            PinyinStd::Cn => dicts_dir.join("cn"),
+            PinyinStd::Tw => dicts_dir.join("tw"),
+        };
+
+        (base_dir.join("dict.da"), base_dir.join(py_file), sub_dir)
+    } else {
+        let p = &cli.profile;
+        (
+            base_dir.join(format!("{p}.da")),
+            base_dir.join(format!("pinyin_{p}.bin")),
+            dicts_dir.join(p),
+        )
+    };
 
     fs::create_dir_all(&base_dir).expect("Failed to create dict directory");
+    let mut files_to_read: Vec<PathBuf> = Vec::new();
 
-    if cli.build {
-        let dicts_dir = base_dir.join("dicts");
-        fs::create_dir_all(&dicts_dir).ok();
-
-        let mut files_to_read: Vec<PathBuf> = Vec::new();
-
-        // reading through arg (--input)
-        if let Some(custom_input) = cli.input {
-            files_to_read.push(custom_input);
+    // Helper closure to collect files from a list of directories
+    let collect_files = |dirs: &[&PathBuf]| -> Vec<PathBuf> {
+        let mut out = Vec::new();
+        // reading through arg (--input) and borrow custom by ref
+        if let Some(ref custom) = cli.input {
+            out.push(custom.clone());
         } else {
             // reading through words.txt
             let default_words = base_dir.join("words.txt");
             if default_words.exists() {
-                files_to_read.push(default_words);
+                out.push(default_words);
             }
             // reading through dicts dir (Default)
-            let dicts_dir = base_dir.join("dicts");
-            if let Ok(entries) = fs::read_dir(&dicts_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_file() {
-                        files_to_read.push(path);
+            for dir in dirs {
+                if let Ok(entries) = fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_file() {
+                            out.push(path);
+                        }
                     }
                 }
             }
         }
+        out
+    };
+
+    // all dicts
+    let std_dir = match cli.pinyin_std {
+        PinyinStd::Cn => &cn_dir,
+        PinyinStd::Tw => &tw_dir,
+    };
+
+    // collect all dicts/ dictionaries and the CN, TW subfolders
+    let all_files = if cli.profile == "default" {
+        (
+            collect_files(&[&dicts_dir, &std_dir]),
+            collect_files(&[&dicts_dir, &profile_dir]),
+        )
+    } else {
+        // custom profile only
+        fs::create_dir_all(&profile_dir).ok();
+        let files = collect_files(&[&profile_dir]);
+        (files.clone(), files)
+    };
+
+    if cli.build
+        || needs_rebuild(
+            &[&da_path, &py_path],
+            all_files.0.iter().chain(&all_files.1),
+        )
+    {
+        fs::create_dir_all(&dicts_dir).ok();
+
+        fs::create_dir_all(&cn_dir).ok();
+        fs::create_dir_all(&tw_dir).ok();
+
+        // Collect dict files (including profile_dir!) and add to files_to_read
+        files_to_read.extend(all_files.1.iter().cloned());
+        if cli.debug {
+            eprintln!("Found {} files: {:?}", files_to_read.len(), all_files);
+        }
 
         if files_to_read.is_empty() {
-            fs::create_dir_all(base_dir.join("dicts")).ok();
+            let target = if cli.profile == "default" {
+                &dicts_dir
+            } else {
+                &profile_dir
+            };
+            fs::create_dir_all(target).ok();
+
             panic!(
-                "No dictionaries found! Put .txt, .u8, .tsv, or .dict.yaml files in {:?}",
-                base_dir.join("dicts")
+                "No dictionaries found! Put .txt, .u8, .tsv, .idx or .dict.yaml files in {:?}",
+                target
             );
         }
 
@@ -334,32 +433,44 @@ fn main() {
 
         // make growable buffer of raw bytes (8-bit, 32-bit)
         let keyset: Vec<(&[u8], u32)> = words.iter().map(|w| (w.as_bytes(), 0)).collect();
+
+        if keyset.is_empty() {
+            anyhow::bail!("No dictionary entries found in {:?}", all_files);
+        }
+
         let da_bytes = DoubleArrayBuilder::build(&keyset).expect("Failed to build DAT");
 
-        let da_tmp = base_dir.join("dict.da.tmp");
+        let da_tmp = da_path.with_extension("da.tmp");
 
         // swap atomically so active GoldenDict lookups never crash!
         fs::write(&da_tmp, &da_bytes).expect("Failed to write temp file");
-        fs::rename(&da_tmp, &da_path).expect("Failed to swap dict.da");
+        fs::rename(&da_tmp, &da_path).expect("Failed to swap .da file");
 
         let py_data: String = pinyin_map
             .iter()
             .map(|(k, v)| format!("{k}\t{v}\n"))
             .collect();
 
-        let tmp_file = format!("{py_file}.tmp");
-        fs::write(base_dir.join(&tmp_file), &py_data).unwrap();
-        fs::rename(base_dir.join(&tmp_file), base_dir.join(py_file)).unwrap();
+        let py_tmp = py_path.with_extension("bin.tmp");
+        fs::write(&py_tmp, &py_data).unwrap();
+        fs::rename(&py_tmp, &py_path).unwrap();
 
-        println!("Built dict.da & {py_file}!");
-        return;
+        // ensure the naming is always accurate and inserted
+        if cli.build {
+            println!(
+                "Built {} & {}!",
+                da_path.file_name().unwrap().to_string_lossy(),
+                py_path.file_name().unwrap().to_string_lossy(),
+            );
+            return Ok(());
+        }
     }
 
     // Open files
     let da_mmap = unsafe { Mmap::map(&File::open(&da_path).unwrap()).unwrap() };
     let da = DoubleArray::new(da_mmap).expect("Invalid dict.da");
 
-    let py_raw = fs::read_to_string(base_dir.join(py_file)).unwrap_or_default();
+    let py_raw = fs::read_to_string(&py_path).unwrap_or_default();
     let pinyin_map: std::collections::HashMap<String, String> = py_raw
         .lines()
         .filter_map(|l| l.split_once('\t'))
@@ -508,4 +619,6 @@ fn main() {
             CSS, wrapper_class, checked_attr, sentence_html
         );
     }
+
+    Ok(())
 }
