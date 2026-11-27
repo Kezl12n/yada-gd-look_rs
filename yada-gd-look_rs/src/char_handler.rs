@@ -4,7 +4,7 @@ use std::collections::HashMap;
 pub fn handle_unmatched(
     remains: &str,
     use_pinyin: bool,
-    pinyin_map: &HashMap<String, String>,
+    reading_map: &HashMap<String, String>,
     debug: bool,
 ) -> (usize, String) {
     // Grab 1 UTF-8 character
@@ -55,7 +55,7 @@ pub fn handle_unmatched(
             && !first_char.is_ascii_punctuation()
             && !"“”《》（）！？、，。".contains(first_char)
         {
-            format_token(&remains[..len], use_pinyin, pinyin_map)
+            format_token(&remains[..len], use_pinyin, reading_map)
         } else {
             first_char.to_string()
         };

@@ -6,6 +6,7 @@ use std::process::Command;
 pub fn ocr_to_goldendict(
     img_path: &str,
     model_preset: &str,
+    layout_reading: bool, 
 ) -> Result<(), Box<dyn std::error::Error>> {
     rusto::init();
 
@@ -15,7 +16,7 @@ pub fn ocr_to_goldendict(
 
     let result = ocr
         .detect_text_builder(ImageSource::Path(img_path.into()))
-        .with_layout_reading(true)
+        .with_layout_reading(layout_reading)
         .as_lines()
         .run()?;
 

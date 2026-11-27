@@ -1,11 +1,11 @@
 use super::num_tone::pinyin_to_toned;
-use crate::PinyinStd;
+use crate::cli::PinyinStd;
 use std::collections::HashMap;
 
 pub fn parse_cedict(
     line: &str,
     words: &mut Vec<String>,
-    pinyin_map: &mut HashMap<String, String>,
+    mut reading_map: Option<&mut HashMap<String, String>>,
     pinyin_std: PinyinStd,
     debug: bool,
 ) -> bool {
@@ -76,23 +76,25 @@ pub fn parse_cedict(
 
                 // add multiple pinyin readings
                 for key in [trad_norm, simp_norm] {
-                    let entry = pinyin_map.entry(key).or_default();
-                    let is_multi_char = trad.chars().count() > 1;
+                    if let Some(map) = reading_map.as_deref_mut() {
+                        let entry = map.entry(key).or_default();
+                        let is_multi_char = trad.chars().count() > 1;
 
-                    for (idx, r) in combined.split(" · ").enumerate() {
-                        if !entry.split(" · ").any(|p| p == r) {
-                            if entry.is_empty() {
-                                entry.push_str(r);
-                            } else if idx == 0
-                                && has_tw_pr
-                                && is_multi_char
-                                && matches!(pinyin_std, PinyinStd::Tw)
-                            {
-                                // Force Taiwan pronunciation to index 0 even if an earlier line existed
-                                *entry = format!("{r} · {entry}");
-                            } else {
-                                entry.push_str(" · ");
-                                entry.push_str(r);
+                        for (idx, r) in combined.split(" · ").enumerate() {
+                            if !entry.split(" · ").any(|p| p == r) {
+                                if entry.is_empty() {
+                                    entry.push_str(r);
+                                } else if idx == 0
+                                    && has_tw_pr
+                                    && is_multi_char
+                                    && matches!(pinyin_std, PinyinStd::Tw)
+                                {
+                                    // Force Taiwan pronunciation to index 0 even if an earlier line existed
+                                    *entry = format!("{r} · {entry}");
+                                } else {
+                                    entry.push_str(" · ");
+                                    entry.push_str(r);
+                                }
                             }
                         }
                     }
