@@ -47,14 +47,10 @@ By default, dictionaries and compiled caches are stored under `~/.local/share/ya
 
 ```text
 ~/.local/share/yada-gd-look/
-├── dicts/
-│   ├── cn/                 # Mainland (CN) Pinyin sources (e.g., cedict_ts.u8)
-│   ├── tw/                 # Taiwan (TW) Pinyin sources
-│   └── <profile>/          # Profile-specific dictionaries (e.g., default/, medical/)
-└── cache/
-    ├── <profile>.da        # Compiled Double-Array Trie per profile
-    ├── pinyin_cn.bin       # Compiled CN pronunciation map
-    └── pinyin_tw.bin       # Compiled TW pronunciation map
+└─ dicts/
+    ├── cn/                 # Mainland (CN) Pinyin sources (e.g., cedict_ts.u8)
+    ├── tw/                 # Taiwan (TW) Pinyin sources
+    └── <profile>/          # Profile-specific dictionaries (e.g., default/, medical/)
 ```
 
 
